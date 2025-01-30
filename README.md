@@ -54,7 +54,7 @@ python3 -m pip uninstall sitgrep
 
 # Usage
 ```
-sitgrep {local} [-h] [-c CONTEXT] [-d DIRECTORY] [-o OUTPUT] [-n Download_Only] 
+sitgrep {local} [options] 
 
 Example: sitgrep -c 2 -d ~/my/dir/ -o output_file 
 
@@ -112,7 +112,7 @@ The `--github/--gitlab` parameter looks for a text file or a list of Github/Gitl
 
 ### Don't want to scan? Only want to download the repositories?
 
-No problem! Use the `-n/--download-only` flag to only download the repositories without scanning them.
+No problem! Use the `-N/--no-scan` flag to only download the repositories without scanning them.
 
 
 # Troubleshooting
