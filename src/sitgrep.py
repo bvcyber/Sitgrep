@@ -17,7 +17,7 @@ from git import (
 from git.exc import GitCommandError
 
 VERSION = "3.6.8"
-TIMESTR = time.strftime("%Y%m%d%H%M")
+TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"
 LOCAL_MODE = False
@@ -833,87 +833,61 @@ def main(args):
             sys.exit(1)
     elif args.subcommands == "local":
         LOCAL_MODE = True
-        try:
-            if not hasattr(args, "github") and not hasattr(args, "github"):
-                packages = get_packages_from_dir(directory)
-            elif (
-                hasattr(args, "github")
-                or hasattr(args, "gitlab")
-            ):
-                ALLOW_DOWNLOAD = True
+    try:
+        if not hasattr(args, "github") and not hasattr(args, "github"):
+            packages = get_packages_from_dir(directory)
+        elif (
+            hasattr(args, "github")
+            or hasattr(args, "gitlab")
+        ):
+            ALLOW_DOWNLOAD = True
 
-                github_packages: list = []
-                gitlab_packages: list = []
+            github_packages: list = []
+            gitlab_packages: list = []
 
-                if isinstance(args.github, list) and len(args.github) > 0:
-                    github_packages = get_package_list(args.github)
-                    github_packages = strip_package_names(github_packages)
-                    github_packages = split_packages(github_packages, mode="github")
-                    directory = (
-                        os.path.join(directory, "Sitgrep_Packages")
-                        if not ("Sitgrep_Packages" in directory)
-                        else directory
-                    )
-                if isinstance(args.gitlab, list) and len(args.gitlab) > 0:
-                    gitlab_packages = get_package_list(args.gitlab)
-                    gitlab_packages = strip_package_names(gitlab_packages)
-                    gitlab_packages = split_packages(gitlab_packages, mode="gitlab")
-                    directory = (
-                        os.path.join(directory, "Sitgrep_Packages")
-                        if not ("Sitgrep_Packages" in directory)
-                        else directory
-                    )
-
-                packages = github_packages + gitlab_packages
-
-            else:
-                directory = os.path.abspath(directory)
-                if not os.path.isdir(directory):
-                    raise (FileNotFoundError)
-        except FileNotFoundError:
-            msg.error(f"The directory specified could not be found: {directory}")
-            sys.exit(1)
-        except Exception as e:
-            if hasattr(args, "github") or hasattr(args, "gitlab"):
-                msg.error(f"There was an error gathering package data: {e}")
-            else:
-                msg.error(
-                    f"There was an error parsing the directory of the package: {e}"
-                )
-            sys.exit(1)
-
-    else:
-        try:
             if isinstance(args.github, list) and len(args.github) > 0:
-                ALLOW_DOWNLOAD = True
                 github_packages = get_package_list(args.github)
                 github_packages = strip_package_names(github_packages)
-                packages = split_packages(github_packages, mode="github")
+                github_packages = split_packages(github_packages, mode="github")
                 directory = (
-                        os.path.join(directory, "Sitgrep_Packages")
-                        if not ("Sitgrep_Packages" in directory)
-                        else directory
-                    )
+                    os.path.join(directory, "Sitgrep_Packages")
+                    if not ("Sitgrep_Packages" in directory)
+                    else directory
+                )
             if isinstance(args.gitlab, list) and len(args.gitlab) > 0:
-                ALLOW_DOWNLOAD = True
                 gitlab_packages = get_package_list(args.gitlab)
                 gitlab_packages = strip_package_names(gitlab_packages)
-                packages = split_packages(gitlab_packages, mode="gitlab")
+                gitlab_packages = split_packages(gitlab_packages, mode="gitlab")
                 directory = (
-                        os.path.join(directory, "Sitgrep_Packages")
-                        if not ("Sitgrep_Packages" in directory)
-                        else directory
-                    )
-            else:
-                directory = os.path.abspath(directory)
-                if not os.path.isdir(directory):
-                    raise (FileNotFoundError)
-        except FileNotFoundError:
-            msg.error("The directory specified could not be found")
-            sys.exit(1)
-        except Exception as e:
-            msg.error(f"There was an error parsing the directory of the package: {e}")
-            sys.exit(1)
+                    os.path.join(directory, "Sitgrep_Packages")
+                    if not ("Sitgrep_Packages" in directory)
+                    else directory
+                )
+
+            packages = github_packages + gitlab_packages
+
+        else:
+            directory = os.path.abspath(directory)
+            if not os.path.isdir(directory):
+                raise (FileNotFoundError)
+    except FileNotFoundError:
+        msg.error(f"The directory specified could not be found: {directory}")
+        sys.exit(1)
+    except Exception as e:
+        if hasattr(args, "github") or hasattr(args, "gitlab"):
+            msg.error(f"There was an error gathering package data: {e}")
+        else:
+            msg.error(
+                f"There was an error parsing the directory of the package: {e}"
+            )
+        sys.exit(1)
+
+    except FileNotFoundError:
+        msg.error("The directory specified could not be found")
+        sys.exit(1)
+    except Exception as e:
+        msg.error(f"There was an error parsing the directory of the package: {e}")
+        sys.exit(1)
 
     print_banner(directory=directory, output_file=output_file)
     start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD)
