@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Sitgrep</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: rgb(18, 18, 18);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: rgb(255, 255, 255);
+        }
+
+        .container {
+            background: rgb(26, 28, 33);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            margin-top: 20px;
+            margin-bottom: 40px;
+            text-align: center;
+            width: 60%;
+        }
+
+        .container2 {
+
+
+            padding: 20px;
+            margin-top: 20px;
+            text-align: center;
+            width: 60%;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            margin: 0;
+            font-size: 72px;
+            color: rgb(2, 148, 213);
+        }
+
+        input[type="file"] {
+            margin: 10px 0;
+            background-color: rgb(18, 18, 18);
+            color: white;
+            border: 1px solid rgb(2, 148, 213);
+            padding: 5px;
+            border-radius: 5px;
+            width: 100%;
+        }
+
+        button {
+            background-color: rgb(2, 148, 213);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: rgb(0, 125, 180);
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: rgb(2, 148, 213);
+        }
+
+        /* header {
+            position: absolute;
+
+            left: 50%;
+            margin-bottom: 30px;
+            transform: translateX(-50%);
+            color: rgb(2, 148, 213);
+        } */
+
+        #content {
+            width: 100%;
+            display: inline-flex;
+            flex-direction: column;
+            align-content: center;
+            align-items: center;
+            justify-content: flex-start;
+
+        }
+    </style>
+    <style>
+        #directory-display {
+            padding: 20px;
+            max-width: 600px;
+            margin: auto;
+        }
+
+        #directory-path {
+            font-weight: bold;
+            color: #999494;
+        }
+
+        #scan-button {
+            background-color: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        #scan-button:hover {
+            background-color: #218838;
+        }
+
+
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        .directory {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .directory-item {
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin-bottom: 5px;
+        }
+
+        .folder {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .file {
+            color: #2980b9;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+    </style>
+    <style>
+        #output-div {
+            height: 300px;
+            overflow-y: scroll;
+            /* border: 1px solid black; */
+            padding: 10px;
+            text-align: left;
+            width: 100%;
+           
+        }
+    </style>
+</head>
+
+<body>
+    <div id="content">
+
+        <div class="container2">
+            <header>
+                <h1>Sitgrep</h1>
+            </header>
+        </div>
+        <div class="container">
+            <p><strong>Selected Directory:</strong> <span id="directory-path">/path/to/directory</span></p>
+
+
+            <button id="scan-button">Scan</button>
+            <hr>
+            <!-- <h3>Command output stream:</h3> -->
+            <div id="output-div"></div>
+        </div>
+    </div>
+
+
+
+    <script>
+        // Fetch directory contents and display them
+        // function fetchDirectoryContents() {
+        //     fetch('/list-directory')
+        //         .then(response => response.json())
+        //         .then(data => {
+        //             const directoryList = document.getElementById('directory-list');
+        //             directoryList.innerHTML = '';  // Clear any previous content
+
+        //             data.forEach(item => {
+        //                 const div = document.createElement('div');
+        //                 div.classList.add('directory-item');
+
+        //                 // Apply different icons for folders and files
+        //                 if (item.type === 'folder') {
+        //                     div.innerHTML = `<img src="/icons/folder-icon.png" class="file-icon"> <span class="file-name">${item.name}</span>`;
+        //                 } else {
+        //                     div.innerHTML = `<img src="/icons/file-icon.png" class="file-icon"> <span class="file-name">${item.name}</span>`;
+        //                 }
+
+        //                 directoryList.appendChild(div);
+        //             });
+        //         })
+        //         .catch(error => {
+        //             console.error('Error fetching directory contents:', error);
+        //         });
+        // }
+        function fetchDirectoryPath() {
+            fetch('/get-host-directory')  // Change the endpoint to fetch the directory path
+                .then(response => response.json())
+                .then(data => {
+                    const directoryPathElement = document.getElementById('directory-path');
+                    directoryPathElement.textContent = data.path;  // Display the directory path
+
+                    // Show the scan button
+                    document.getElementById('scan-button').style.display = 'inline-block';
+                })
+                .catch(error => {
+                    console.error('Error fetching directory path:', error);
+                });
+        }
+
+        // Fetch directory contents when the page loads
+        window.onload = fetchDirectoryPath;
+    </script>
+    <script>
+        // Function to handle the file upload and trigger the streaming
+        const scanButton = document.getElementById('scan-button');
+        scanButton.addEventListener('click', function (event) {
+            scanButton.innerHTML = 'Scanning...';  // Show a message while scanning
+            scan();
+        });
+
+        function scan() {
+            const outputDiv = document.getElementById('output-div');
+
+            // Create a new EventSource instance to receive SSE from the server
+            const eventSource = new EventSource('/scan');
+
+            // Listen for new messages from the server
+            eventSource.onmessage = function (event) {
+                console.log(event.data)
+                outputDiv.innerHTML += event.data + '<br>';
+                outputDiv.scrollTop = outputDiv.scrollHeight;  // Auto-scroll to the bottom
+            };
+            eventSource.addEventListener('close', function(event) {
+                console.log('Connection closed');
+                const scanButton = document.getElementById('scan-button');
+                scanButton.innerText = "Scan";
+            });
+
+            eventSource.addEventListener('download', function (event) {
+                const downloadUrl = event.data;
+                console.log("Download link received:", downloadUrl);  // Log the download URL
+
+                // Create a hidden link element and trigger a click to start the download
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = 'results.zip';  // The name can be overridden by the server response
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);  // Clean up the link after downloading
+            });
+            // Handle any errors with the connection
+            eventSource.onerror = function (event) {
+                console.error("Error in stream:", event);
+                const scanButton = document.getElementById('scan-button');
+                scanButton.innerText = "Scan";
+                eventSource.close();
+            };
+        }
+
+    </script>
+
+
+</body>
+
+</html>

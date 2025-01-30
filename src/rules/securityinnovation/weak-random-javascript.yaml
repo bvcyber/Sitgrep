@@ -1,0 +1,27 @@
+rules:
+- id: weak-random
+  message: >-
+    Detected use of the `Math.random()` function which is not a 
+    cryptographically strong random number generator (RNG). If you are using this
+    RNG to create passwords or secret tokens, use the `crypto` library instead.
+  languages: [javascript, typescript]
+  severity: WARNING
+  metadata:
+    owasp:
+    - A02:2021 - Cryptographic Failures
+    cwe:
+    - 'CWE-330: Use of Insufficiently Random Values'
+    category: security
+    technology:
+    - javascript
+    - typescript
+    references:
+    - https://owasp.org/Top10/A02_2021-Cryptographic_Failures
+    subcategory:
+    - audit
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: LOW
+  pattern-either:
+  - pattern: |
+      Math.random(...)

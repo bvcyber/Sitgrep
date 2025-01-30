@@ -1,0 +1,13 @@
+sitgrep-report*
+.DS_Store*
+sitgrep.code-workspace
+__pycache__*
+*.pyc
+build*
+*.spec
+test.txt
+requirements*
+__MACOSX*
+test.py
+*.egg-info
+Sitgrep_Packages*

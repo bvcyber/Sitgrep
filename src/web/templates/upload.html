@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload ZIP File</title>
+    <link rel="stylesheet" href="/static/css/style.css"> <!-- Link to your CSS file -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: rgb(18, 18, 18);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: rgb(255, 255, 255);
+        }
+        .container {
+            background: rgb(26, 28, 33);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            text-align: center;
+            width: 300px;
+        }
+        h1 {
+            margin-bottom: 20px;
+            font-size: 72px;
+            color: rgb(2, 148, 213);
+        }
+        input[type="file"] {
+            margin: 10px 0;
+            background-color: rgb(18, 18, 18);
+            color: white;
+            border: 1px solid rgb(2, 148, 213);
+            padding: 5px;
+            border-radius: 5px;
+            width: 100%;
+        }
+        button {
+            background-color: rgb(2, 148, 213);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+        button:hover {
+            background-color: rgb(0, 125, 180);
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: rgb(2, 148, 213);
+        }
+        header {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgb(2, 148, 213);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Sitgrep</h1>
+    </header>
+    <div class="container">
+        <h2>Upload a ZIP File</h2>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".zip" required>
+            <button type="submit">Upload</button>
+        </form>
+        <div class="footer">
+            <p>Supported format: .zip</p>
+        </div>
+    </div>
+</body>
+</html>

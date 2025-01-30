@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+
+<html data-theme="dark">
+
+<head>
+    <title>Sitgrep</title>
+    <link rel="icon" href="./static/img/sitgrep-logo.png" type="image/png">
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="./static/css/sitgrep.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.9.1/underscore-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsSHA/3.3.1/sha256.min.js"
+        integrity="sha512-qw5xqZrce8QejL/YnoVvHaXggvfJK3bP2rczgxPSL+JhACfJhOU6gG+/c1LFyRxIpwaF8pZlfwUXLIK+5EEiKA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <script src="https://kit.fontawesome.com/ef25ea37c3.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.syncfusion.com/ej2/dist/ej2.min.js" type="text/javascript"></script>
+    <script src="results/results.js"></script>
+    <script src="./static/js/renderer.js"></script>
+    <script src="./static/js/paginator.js"></script>
+    <script src="./static/js/filter.js"></script>
+    <script src="./static/js/sort.js"></script>
+    <script src="./static/js/utils.js"></script>
+    <script src="./static/js/restore.js"></script>
+    <script src="./static/js/delete.js"></script>
+    <script src="./static/js/export.js"></script>
+    <script src="./static/js/stateHandlers.js"></script>
+    <script src="./static/js/dataHandlers.js"></script>
+    <script src="./static/js/sitgrep.js"></script>
+    <script src="./static/js/nav.js"></script>
+    <script src="./static/js/dashboard.js"></script>
+</head>
+
+<body>
+    <div class="container" id="contentContainer">
+
+        <div id="mySidebar" class="sidebar">
+            <div class="openbtn" id="openbtn" onclick="toggleMenu()">&#9776; <span id="menu-title">Sitgrep Menu</span>
+            </div>
+
+            <ul id="sidebar-options" style="display:none">
+                <li><div class="nav-item"  id="dashboard-nav" onclick="loadDashboard()">Dashboard</div></li>
+                <li><div class="nav-item"  id="findings-nav" onclick="loadFindings()">Findings</div></li>
+                <li><div class="nav-item"  id="trash-nav" onclick="loadFalsePositives()">Trash</div></li>
+                <li><div class="nav-item" onclick="exportToJson()">Export</div></li>
+                <li><div class="nav-item" onclick="restoreAllFindings()">Reset</div></li>
+            </ul>
+            <div class="nav-logo">
+                <div id="logo-div"><img id="logo" src="./static/img/sitgrep-logo.png" style="height: 30px; "></div>
+            </div>
+        </div>
+        <div id="topBar">
+            <div id="page-title"></div>
+        </div>
+        <div class="main" id="main-div">
+            <div class="opts" id="opts">
+                <div class="optBody">
+                    <div class="vuln-sort">
+                        <div class="filter-title">
+                            <label for="sortSelect">Sort By</label>
+                        </div>
+                        <select class="dropdown" name="sortSelect" id="sortSelect">
+                            <option value="NA">--Select--</option>
+                            <option value="rule_id">Name</option>
+                            <option value="confidence">Confidence</option>
+                            <option value="impact">Impact</option>
+                            <option value="likelihood">Likelihood</option>
+                        </select>
+                    </div>
+                    <div class="filters" id="filters">
+                        <div class="filter" id="impact-filter">
+                            <div class="filter-title"><span>Impact</span></div>
+                            <div class="filter-options" id="impact-filter-options" value="impact">
+                                <label class="filter-option">
+                                    <input type="checkbox" name="feature" value="low">
+                                    <span class="filter-label">
+                                        <span class="Icon Icon--checkLight Icon--smallest">
+                                            <i class="fa fa-check"></i>
+                                        </span>
+                                        Low
+                                    </span>
+                                </label>
+                                <label class="filter-option">
+                                    <input type="checkbox" name="feature" value="medium">
+                                    <span class="filter-label">
+                                        <span class="Icon Icon--checkLight Icon--smallest">
+                                            <i class="fa fa-check"></i>
+                                        </span>
+                                        Medium
+                                    </span>
+                                </label>
+                                <label class="filter-option">
+                                    <input type="checkbox" name="feature" value="high">
+                                    <span class="filter-label">
+                                        <span class="Icon Icon--checkLight Icon--smallest">
+                                            <i class="fa fa-check"></i>
+                                        </span>
+                                        High
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="filter" id="likelihood-filter">
+                            <div class="filter-title"><span>Likelihood</span></div>
+                            <div class="filter-options" id="likelihood-filter-options" value="likelihood">
+                                <label class="filter-option">
+                                    <input type="checkbox" name="feature" value="low">
+                                    <span class="filter-label">
+                                        <span class="Icon Icon--checkLight Icon--smallest">
+                                            <i class="fa fa-check"></i>
+                                        </span>
+                                        Low
+                                    </span>
+                                </label>
+                                <label class="filter-option">
+                                    <input type="checkbox" name="feature" value="medium">
+                                    <span class="filter-label">
+                                        <span class="Icon Icon--checkLight Icon--smallest">
+                                            <i class="fa fa-check"></i>
+                                        </span>
+                                        Medium
+                                    </span>
+                                </label>
+                                <label class="filter-option">
+                                    <input type="checkbox" name="feature" value="high">
+                                    <span class="filter-label">
+                                        <span class="Icon Icon--checkLight Icon--smallest">
+                                            <i class="fa fa-check"></i>
+                                        </span>
+                                        High
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="filter" id="confidence-filter">
+                            <div class="filter-title"><span>Confidence</span></div>
+                            <div class="filter-options" id="confidence-filter-options" value="confidence">
+                                <label class="filter-option">
+                                    <input type="checkbox" name="feature" value="low">
+                                    <span class="filter-label">
+                                        <span class="Icon Icon--checkLight Icon--smallest">
+                                            <i class="fa fa-check"></i>
+                                        </span>
+                                        Low
+                                    </span>
+                                </label>
+                                <label class="filter-option">
+                                    <input type="checkbox" name="feature" value="medium">
+                                    <span class="filter-label">
+                                        <span class="Icon Icon--checkLight Icon--smallest">
+                                            <i class="fa fa-check"></i>
+                                        </span>
+                                        Medium
+                                    </span>
+                                </label>
+                                <label class="filter-option">
+                                    <input type="checkbox" name="feature" value="high">
+                                    <span class="filter-label">
+                                        <span class="Icon Icon--checkLight Icon--smallest">
+                                            <i class="fa fa-check"></i>
+                                        </span>
+                                        High
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="filter" id="owasp-filter">
+                            <div class="filter-title"><span>OWASP</span></div>
+                            <select class="dropdown" id="owasp-select" name="owasp-select"></select>
+                        </div>
+                        <div class="filter" id="package-filter">
+                            <div class="filter-title"><span>Package</span></div>
+                            <select class="dropdown" id="package-select" name="package-select"></select>
+                        </div>
+                        <div class="filter" id="rule-filter">
+                            <div class="filter-title"><span>Rule</span></div>
+                            <select class="dropdown" id="rule-select" name="rule-select"></select>
+                        </div>
+                        <button id="resetFilter" onclick="resetFilter()">Reset Filter</button>
+                    </div>
+                </div>
+            </div>
+            <div id="loading-animation"></div>
+            <button id="scroll-to-top" onclick="scrollToTop()">Scroll to Top</button>
+            <div id="main-content">
+                
+            </div>
+        </div>
+    </div>
+</body>
+</body>
+
+</html>
