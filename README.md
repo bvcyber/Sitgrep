@@ -1,6 +1,6 @@
 ![HTML Screenshot](assets/sitgrep-slogan.png)
 
-Sitgrep is a wrapper for Semgrep that creates an HTML page that allows you to review findings, remove false positives, and export the sorted results in a JSON format.
+Sitgrep is a wrapper for [Semgrep](https://github.com/semgrep/semgrep) that creates an HTML page that allows you to review findings, remove false positives, and export the sorted results in a JSON format.
 
 The benefit of using Sitgrep is that Sitgrep provides addtional functionalities to make it easier to download Github and Gitlab packages. Additionally, this can be used locally without sending metrics which makes it viable for scanning proprietary code that is not public.
 
@@ -94,7 +94,7 @@ optional arguments:
 
 # Local Mode
 
-`sitgrep local` uses local rules, sourced from Semgrep's open source rules github, instead of Semgrep's official registry.
+`sitgrep local` uses local rules, sourced from Semgrep's [open source rules Github](https://github.com/semgrep/semgrep-rules).
 
 `sitgrep local --github` downloads the packages, listed in a text file or in the command line:
 
@@ -140,5 +140,7 @@ If contributing Semgrep rules, please use Semgrep's rule playground to write and
 If you want to add your own rules, put them in the `.sitgrep/rules/securityinnovation/` folder
 
 # Authors and acknowledgment
-- Original bash script author: Stephen Mull
-- Python rewrite and current maintainer: John Ascher
+- Original author and current maintainer: [John Ascher](https://github.com/S0meday)
+- Semgrep engine: [Semgrep](https://github.com/semgrep/)
+- Semgrep rules: [Semgrep rules registry](https://github.com/semgrep/semgrep-rules) by Semgrep
+
