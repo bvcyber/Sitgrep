@@ -71,7 +71,7 @@ def scan(dir):
             cmd.extend(["--metrics=off", "--config", f"{INSTALL_DIR}/rules/", dir])
         else:
             cmd.extend(
-                ["--config", "auto", "--config", f"{INSTALL_DIR}/rules/securityinnovation/", dir]
+                ["--config", "auto", "--config", f"{INSTALL_DIR}/rules/local/", dir]
             )
 
         cmd_string = " ".join(cmd)
