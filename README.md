@@ -137,7 +137,7 @@ For any issues that aren't resolved by these potential fixes, please open an iss
 If contributing Semgrep rules, please use Semgrep's rule playground to write and test the rules before submitting them to Sitgrep.
 
 ## Adding Your Own Rules
-If you want to add your own rules, put them in the `.sitgrep/rules/securityinnovation/` folder
+If you want to add your own rules, put them in the `.sitgrep/rules/local/` folder
 
 # Authors and acknowledgment
 - Original author and current maintainer: [John Ascher](https://github.com/S0meday)
