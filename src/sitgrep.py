@@ -54,7 +54,7 @@ def scan(dir):
             "--json",
             "--exclude=sitgrep-report*",
             "--exclude=sitgrep-config.json",
-            "--exclude=semgrep_output.json",
+            "--exclude=semgrep-output.json",
             "--exclude=tst",
             "--exclude=test",
             "--exclude=tests",
