@@ -133,7 +133,7 @@ def scan(dir):
             msg.info("-------------- Semgrep output end --------------")
             msg.info(f"Semgrep command used: {cmd_string}")
             msg.info(
-                f"The raw Semgrep JSON output was saved to {os.getcwd()+'/semgrep_output.json'}"
+                f"The raw Semgrep JSON output was saved to {os.getcwd()+'/semgrep-output.json'}"
             )
         msg.info("Scanning complete")
 
@@ -377,7 +377,7 @@ def goto_output_dir():
 
 def save_raw_semgrep_output(results):
     goto_output_dir()
-    with open("semgrep_output.json", "w") as output:
+    with open("semgrep-output.json", "w") as output:
         json.dump(results, output, indent=4)
 
 
