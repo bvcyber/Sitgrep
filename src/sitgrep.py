@@ -369,7 +369,6 @@ def save_results(scan_results: dict, output_file, dir="", packages=[]):
             msg.success("Congrats, there were no findings.")
     except Exception as e:
         msg.error(f"There was an error saving the output: ", console, True)
-        # traceback.print_exc()
         sys.exit(-1)
 
 
