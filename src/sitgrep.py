@@ -15,8 +15,18 @@ from git import (
     Repo,
 )
 from git.exc import GitCommandError
+import matplotlib
+import numpy as np
+from rich.text import Text
+from rich.console import Console
 
-VERSION = "3.6.8"
+from rich.traceback import install
+
+install(show_locals=True)
+console = Console(color_system="truecolor")
+
+
+VERSION = "3.6.9"
 TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"
@@ -44,7 +54,7 @@ def scan(dir):
         )
         stdout, stderr = process.communicate()
     except:
-        msg.error("Failed to invoke Semgrep. Exiting.")
+        msg.error("Failed to invoke Semgrep. Exiting.", console, False)
         sys.exit(1)
 
     try:
@@ -56,7 +66,6 @@ def scan(dir):
             "--exclude=sitgrep-config.json",
             "--exclude=semgrep-output.json",
             "--exclude=tst",
-            "--exclude=test",
             "--exclude=tests",
             "--no-git-ignore",
             f"-o semgrep-scan-{TIMESTR}"
@@ -124,7 +133,7 @@ def scan(dir):
                     output = json.loads(str(output.read()))
                     os.remove(f"semgrep-scan-{TIMESTR}")  
                 except Exception as e: 
-                    msg.error(e)
+                    msg.error("",console, True)
                     sys.exit(1)
         else:
             raise BadScanException
@@ -144,7 +153,7 @@ def scan(dir):
         if VERBOSE_LEVEL > 0:
             msg.info("-------------- Semgrep output end --------------")
         msg.error(
-            "Semgrep attempted to scan 0 files. Check if the specified directory is listed in a .gitignore file for the project being scanned. The specified directory or the results may also be empty."
+            "Semgrep attempted to scan 0 files. Check if the specified directory is listed in a .gitignore file for the project being scanned. The specified directory or the results may also be empty.", console, False
         )
         msg.info(f"Semgrep command: {cmd_string}")
         try:
@@ -157,7 +166,7 @@ def scan(dir):
         if VERBOSE_LEVEL > 0:
             msg.info("-------------- Semgrep output end --------------")
 
-        msg.error(f"Semgrep returned with errors: {e.stdout}")
+        msg.error(f"Semgrep returned with errors: ", console, True)
         msg.info(f"Semgrep command: {cmd_string}")
         try:
             os.remove(f"semgrep-scan-{TIMESTR}")  
@@ -170,7 +179,7 @@ def scan(dir):
         if VERBOSE_LEVEL > 0:
             msg.info("-------------- Semgrep output end --------------")
             msg.info(f"Semgrep command: {cmd_string}")
-        msg.error(f"An error occurred: {str(e)}")
+        msg.error(f"An error occurred: ", console, True)
         try:
             os.remove(f"semgrep-scan-{TIMESTR}")  
         except:
@@ -280,10 +289,10 @@ def process_json(results, dir, packages) -> dict:
 
         return json_results
     except KeyError as k:
-        msg.error(f"The following key could not be found while parsing JSON: {k}")
+        msg.error(f"The following key could not be found while parsing JSON: ", console, True)
         sys.exit(1)
     except Exception as e:
-        msg.error(f"Error parsing JSON: {e}")
+        msg.error(f"Error parsing JSON: ", console, True)
         sys.exit(1)
 
 
@@ -351,15 +360,15 @@ def save_results(scan_results: dict, output_file, dir="", packages=[]):
                         os.chdir(f'{"/".join(output_file_location.split("/")[:-1])}')
                         webbrowser.open_new_tab(f"{output_file}.html")
             except FileExistsError as e:
-                msg.error(f"The file already exists: {e}")
+                msg.error(f"The file already exists: {e}", console, False)
                 sys.exit(-1)
             except Exception as e:
-                msg.error(f"There was an error saving the file: {e}")
+                msg.error(f"There was an error saving the file: ", console, True)
                 sys.exit(-1)
         else:
             msg.success("Congrats, there were no findings.")
     except Exception as e:
-        msg.error(f"There was an error saving the output: {e}")
+        msg.error(f"There was an error saving the output: ", console, True)
         # traceback.print_exc()
         sys.exit(-1)
 
@@ -510,6 +519,8 @@ def clone_and_make_config(failed_packages, package_details, progress_bar):
         if package_details["site"] == "github":
             if branch == "main":
                 branch = ""
+
+            progress_bar.start()
             Repo.clone_from(
                 url=f'https://github.com/{package_details["path"]}/{project_name}.git',
                 to_path=f"{os.getcwd()}/{project_name}",
@@ -522,6 +533,8 @@ def clone_and_make_config(failed_packages, package_details, progress_bar):
         elif package_details["site"] == "gitlab":
             if branch == "main":
                 branch = ""
+
+            progress_bar.start()
             Repo.clone_from(
                 url=f'https://gitlab.com/{package_details["path"]}/{project_name}.git',
                 to_path=f"{os.getcwd()}/{project_name}",
@@ -539,10 +552,10 @@ def clone_and_make_config(failed_packages, package_details, progress_bar):
         os.chdir("../")
 
     except GitCommandError as e:
-        #msg.error(f"The repository wasn't found, you do not have access, or another error occurred: {e}")
+        progress_bar.stop()
         handle_failed_package(failed_packages, project_name, f"The repository wasn't found, you do not have access, or another error occurred. {e}")
     except Exception as e:
-        #msg.error(f"Error while downloading package: {e}")
+        progress_bar.stop()
         handle_failed_package(failed_packages, project_name, f"Error while downloading package - {e}")
 
 
@@ -562,23 +575,24 @@ def download_packages(packages: list):
         progress_bar = ProgressBar(package["project"], hide=False)
 
         clone_and_make_config(failed_packages, package, progress_bar)
+        progress_bar.stop()
 
     if len(failed_packages) == len(packages):
         print()
-        msg.error("All packages failed to download.")
+        msg.error("All packages failed to download.", console, False)
 
         for failed_package in failed_packages:
-            msg.error(f'Package {failed_package["project"]}: {failed_package["error"]}')
+            msg.error(f'Package {failed_package["project"]}: {failed_package["error"]}', console, False)
 
         sys.exit(1)
 
     else:
         if len(failed_packages) > 0:
             print()
-            msg.error(f"The following packages failed to be downloaded:\n")
+            msg.error(f"The following packages failed to be downloaded:\n", console, False)
             for failed_package in failed_packages:
                 msg.error(
-                    f'Package {failed_package["project"]}: {failed_package["error"]}'
+                    f'Package {failed_package["project"]}: {failed_package["error"]}', console, False
                 )
             print()
         else:
@@ -600,7 +614,7 @@ def split_packages(packages: list, mode: str):
                 parsed_github_url = parse_github_url(package)
 
                 if not parsed_github_url or parsed_github_url is None:
-                    msg.error(f"Unable to parse Github URL: {package}")
+                    msg.error(f"Unable to parse Github URL: {package}", console, False)
 
                 split_packages.append(
                     {
@@ -617,7 +631,7 @@ def split_packages(packages: list, mode: str):
                 parsed_gitlab_url = parse_gitlab_url(package)
 
                 if not parsed_gitlab_url or parsed_gitlab_url is None:
-                    msg.error(f"Unable to parse Github URL: {package}")
+                    msg.error(f"Unable to parse Github URL: {package}", console, False)
 
                 split_packages.append(
                     {
@@ -629,12 +643,12 @@ def split_packages(packages: list, mode: str):
                     }
                 )
             else:
-                msg.error(f"Could not parse URL. Only Github and Gitlab links are currently supported.")
+                msg.error(f"Could not parse URL. Only Github and Gitlab links are currently supported.", console, False)
                 msg.info(
                     f"Please report this so this usecase can be added."
                 )
         else:
-            msg.error(f"Unable to parse package: {package}")
+            msg.error(f"Unable to parse package: {package}", console, False)
 
     return split_packages
 
@@ -654,12 +668,12 @@ def get_package_list(packages):
                 packages = ",".join(packages)
                 package_list = packages.split(",")
         except Exception as e:
-            msg.error(f"There was an error parsing the package list: {e}")
+            msg.error(f"There was an error parsing the package list: ", console, False)
             sys.exit(1)
 
     else:
         msg.error(
-            f"Unsupported type: Expected a text file or a list of packages, not {type(packages)}"
+            f"Unsupported type: Expected a text file or a list of packages, not {type(packages)}", console, False
         )
         sys.exit(1)
 
@@ -722,23 +736,40 @@ def open_dir_in_vscode(dir):
 
 
 def print_banner(directory, output_file):
-    banner_len = min(os.get_terminal_size().columns, 80)
+    cmap = matplotlib.colormaps["rainbow_r"]
 
-    print("-" * banner_len)
-    print(
-        r"""
-    ┌─────────────────────┐
-    │       Sitgrep       │
-    │                     │
-    │  Powered by Semgrep │  
-    └─────────────────────┘  
-"""
-    )
-    print("Context lines:", CONTEXT_LINE_COUNT)
-    print("Directory to scan:", directory)
-    print("Output file:", output_file)
-    print("Version:", str(VERSION))
-    print("-" * banner_len)
+    banner = "Context lines: " + str(CONTEXT_LINE_COUNT) + "\n"
+    banner += "Directory to scan: " + str(directory) + "\n"
+    banner += "Output file: " + str(output_file) + "\n"
+    banner += "Version: " + str(VERSION) + "\n"
+
+    banner_len = min(os.get_terminal_size().columns, max([len(a) for a in banner.split("\n")]))
+
+    banner = "\n".join([a.center(banner_len, " ") for a in r"""
+┌─────────────────────┐
+│       Sitgrep       │
+│                     │
+│  Powered by Semgrep │
+└─────────────────────┘
+""".split("\n")]) + "\n" + banner
+
+    banner = "-" * banner_len + "\n" + banner + "\n" + "-" * banner_len
+    gradient = np.linspace(0, 1, banner_len)
+
+    newbanner = Text("")
+    for line in [a for a in banner.split("\n") if a!=""]:
+        newline = Text("")
+        for (i,chr) in enumerate([a for a in re.split(r"(.)", line) if a!='']):
+            try:
+                colorhex = matplotlib.colors.rgb2hex(cmap(gradient[i])) 
+                newline.append(f"{chr}", style=f"{colorhex}")
+            except IndexError: pass
+        newbanner.append(newline)
+        newbanner.append(Text("\n"))
+
+    console = Console(color_system="truecolor")
+    console.print(newbanner)
+
 
 
 def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
@@ -770,16 +801,17 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
                 ):
                     valid_errors.append(error)
             if len(valid_errors) > 0:
-                msg.error("Semgrep encountered errors and returned no results:")
-                msg.error(valid_errors)
+                msg.error("Semgrep encountered errors and returned no results:", console, False)
+                msg.error(valid_errors, console, False)
             else:
                 msg.success("Congrats, there were no findings.")
-        else:
+        elif "results" not in scan_results and "errors" not in scan_results and "paths" not in scan_results:
             msg.error(
-                "There was an error with Semgrep and the results returned null. Please report this issue."
+                "There was an error with Semgrep and the results returned null. Please report this issue.", console, False
             )
+        
     except Exception as e:
-        msg.error(f"There was an error: {e}")
+        msg.error(f"There was an error: ", console, True)
 
 
 def main(args):
@@ -826,10 +858,10 @@ def main(args):
                 sys.exit(0)
             else:
                 msg.error(
-                    f"The JSON could not be found at the given path: {expanded_filepath}"
+                    f"The JSON could not be found at the given path: {expanded_filepath}", console, False
                 )
         except Exception as e:
-            msg.error(f"There was an error loading the JSON file: {e}")
+            msg.error(f"There was an error loading the JSON file: ", console, True)
             sys.exit(1)
     elif args.subcommands == "local":
         LOCAL_MODE = True
@@ -871,22 +903,22 @@ def main(args):
             if not os.path.isdir(directory):
                 raise (FileNotFoundError)
     except FileNotFoundError:
-        msg.error(f"The directory specified could not be found: {directory}")
+        msg.error(f"The directory specified could not be found: {directory}", console, False)
         sys.exit(1)
     except Exception as e:
         if hasattr(args, "github") or hasattr(args, "gitlab"):
-            msg.error(f"There was an error gathering package data: {e}")
+            msg.error(f"There was an error gathering package data: ", console, True)
         else:
             msg.error(
-                f"There was an error parsing the directory of the package: {e}"
+                f"There was an error parsing the directory of the package: ", console, True
             )
         sys.exit(1)
 
     except FileNotFoundError:
-        msg.error("The directory specified could not be found")
+        msg.error("The directory specified could not be found", console, False)
         sys.exit(1)
     except Exception as e:
-        msg.error(f"There was an error parsing the directory of the package: {e}")
+        msg.error(f"There was an error parsing the directory of the package: ", console, True)
         sys.exit(1)
 
     print_banner(directory=directory, output_file=output_file)
@@ -1050,7 +1082,7 @@ def cli():
         msg.warn("Detected keyboard interrupt. Exiting...")
     except MemoryError:
         msg.error(
-            "Ran out of memory. Please report this package for further investigation."
+            "Ran out of memory. Please report this package for further investigation.", console, False
         )
     except Exception as e:
-        msg.error(f"An unknown exception occured: {e}")
+        msg.error(f"An unknown exception occured: ", console, True)
