@@ -1,6 +1,6 @@
 [project]
 name = "sitgrep"
-version = "3.6.8"
+version = "3.6.9"
 description = "Enhance your code review with Sitgrep"
 authors = [
     { name = "John Ascher", email = "jascher@securityinnovation.com" }
@@ -14,7 +14,10 @@ dependencies = [
     "gitpython>=3.1.43",
     "packaging>=24.0",
     "PyYAML",
-    "rich"
+    "rich",
+    "matplotlib",
+    "numpy"
+
 ]
 requires-python = ">=3.7.16"
 

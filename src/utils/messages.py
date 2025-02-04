@@ -6,8 +6,10 @@ RESET = "\033[0m"
 ORANGE = "\033[38;5;208m"
 
 
-def error(msg):
-    print( f"[{RED}ERROR{RESET}] {msg}")
+def error(msg, console, showException=True):
+    print( f"[{RED}ERROR{RESET}] {msg}: ")
+    if showException:
+        console.print_exception(show_locals=False)
 
 def get_info(msg):
     return f"[{CYAN}INFO{RESET}] {msg}"
