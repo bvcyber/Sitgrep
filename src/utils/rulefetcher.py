@@ -10,7 +10,8 @@ from utils import messages as msg
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn
 
-local_files = f"{os.path.expanduser(f"~{getpass.getuser()}")}/.sitgrep"
+user_home = os.path.expanduser(f"~{getpass.getuser()}")
+local_files = f"{user_home}/.sitgrep"
 def hsv_to_rgb(h, s, v):
     """Converts HSV to RGB."""
     if s == 0.0:
