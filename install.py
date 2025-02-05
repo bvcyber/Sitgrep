@@ -84,7 +84,7 @@ def install():
     try:
         info("Installing Sitgrep...")
         run(["python3", "-m", "pip", "install", "--upgrade", "pip"])
-        run(["python3", "-m", "pip", "install", "--user", "-e", "."])
+        run(["python3", "-m", "pip", "install", "--user", "-e", ".", "--break-system-packages"])
         local_files = f"{os.path.expanduser(f"~{getpass.getuser()}")}/.sitgrep"
         shutil.copytree("src/rules/", f"{local_files}/rules/", dirs_exist_ok=True)
         shutil.copytree("src/web", f"{local_files}/web", dirs_exist_ok=True)
