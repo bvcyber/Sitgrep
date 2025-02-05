@@ -78,7 +78,7 @@ def run(*args, **kwargs):
         text=True
     )
 
-
+local_files = f"{get_user_home()}/.sitgrep"
 def install():
     
     try:
@@ -87,7 +87,6 @@ def install():
         install = run(["python3", "-m", "pip", "install", "--user", "-e", ".", "--break-system-packages"])
         if "ERROR" in install.stderr:
             error(install.stderr)
-        local_files = f"{os.path.expanduser(f"~{getpass.getuser()}")}/.sitgrep"
         shutil.copytree("src/rules/", f"{local_files}/rules/", dirs_exist_ok=True)
         shutil.copytree("src/web", f"{local_files}/web", dirs_exist_ok=True)
         
@@ -109,8 +108,6 @@ def install():
 
 def setup():
     
-    local_files = f"{get_user_home()}/.sitgrep"
-
     try:
 
         if os.path.isdir(local_files):
