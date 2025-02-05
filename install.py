@@ -23,7 +23,7 @@ def get_user_home():
 
 
 def error(message):
-    print(f"{msg.get_error(message)}. Exiting...")
+    print(f"{msg.get_error(message)}")
     sys.exit(1)
 
 
@@ -42,8 +42,8 @@ def warn(message):
 def install_error(line_number, e):
     error(f"There was an error while installing at line {line_number}: {e}")
 
-def setup_error(line_number):
-    error(f"There was an error while setting up at line {line_number}")
+def setup_error(line_number, e):
+    error(f"There was an error while setting up at line {line_number}: {e}")
     exit(1)
 
 def get_os():
@@ -74,23 +74,25 @@ def run(*args, **kwargs):
         *args,
         **kwargs,
         stdin=stdin,
-        stdout=subprocess.DEVNULL,
-        stderr=stderr,
+        capture_output=True,
+        text=True
     )
 
 
 def install():
     
     try:
-        info("Installing Sitgrep...")
         run(["python3", "-m", "pip", "install", "--upgrade", "pip"])
-        run(["python3", "-m", "pip", "install", "--user", "-e", ".", "--break-system-packages"])
+        info("Installing Sitgrep...")
+        install = run(["python3", "-m", "pip", "install", "--user", "-e", ".", "--break-system-packages"])
+        if "ERROR" in install.stderr:
+            error(install.stderr)
         local_files = f"{os.path.expanduser(f"~{getpass.getuser()}")}/.sitgrep"
         shutil.copytree("src/rules/", f"{local_files}/rules/", dirs_exist_ok=True)
         shutil.copytree("src/web", f"{local_files}/web", dirs_exist_ok=True)
-
+        
     except Exception as e:
-        install_error(sys.exc_info()[-1].tb_lineno, e)    
+        install_error(sys.exc_info()[-1].tb_lineno, e)
 
     success("Installation successful")
     print()
@@ -118,20 +120,19 @@ def setup():
         os.makedirs(local_files, exist_ok=True)
 
     except Exception as e:
-        setup_error(sys.exc_info()[-1].tb_lineno)
+        setup_error(sys.exc_info()[-1].tb_lineno, e)
 
 def prechecks():
 
     try:
-
         if get_os() == "nt":
-        warn("Please use the Docker image when using Sitgrep on Windows.")
-        sys.exit(1)
+            warn("Please use the Docker image when using Sitgrep on Windows.")
+            sys.exit(1)
 
         if is_user_admin():
             error("Root user detected. Please run this script as your user, not sudo/root/admin.")
             sys.exit(1)
-            
+
         # Try running the command
         result = subprocess.run(
             ["python3", "-m", "pip", "--version"],
@@ -149,7 +150,7 @@ def prechecks():
         error("The command 'python3 -m pip --version' failed while doing prechecks")
     except Exception as e:
         error(f"An unknown error occured while doing prechecks.\n{e}")
-        
+
 prechecks()
 setup()
 install()
