@@ -2,7 +2,7 @@
 
 Sitgrep is a wrapper for [Semgrep](https://github.com/semgrep/semgrep) that makes it quick and easy to scan code for insecure coding practices and hard-coded secrets.
 
-Sitgrep provides functionalities to make it easier to download Github and Gitlab packages, review findings quicker, and export results for your client, saving you precious time while on your engagement. Additionally, this can be used locally without sending metrics which makes it viable for scanning proprietary code that is not public, making it perfect for when clients are a bit reluctant to run a static analysis tool on their code base.
+Sitgrep offers an intuitive solution for scanning GitHub and GitLab repositories. By simply providing a link to any repository, Sitgrep will automatically download and perform a thorough scan, streamlining the process for reviewing code for security issues. It then generates a results pag, which gets automatically opened, allowing you to review findings quicker and export results for your client, saving you precious time while on your engagement. Additionally, this can be used locally without sending metrics which makes it viable for scanning proprietary code that is not public, making it perfect for when clients are a bit reluctant to run a static analysis tool on their code base.
 
 ![HTML Screenshot](assets/dashboard.png)
 ![HTML Screenshot](assets/findings.png)
