@@ -129,7 +129,7 @@ def prechecks():
         sys.exit(1)
 
         if is_user_admin():
-            error("Root user detected. Please run this script as your user, not sudo/root/admin.}")
+            error("Root user detected. Please run this script as your user, not sudo/root/admin.")
             sys.exit(1)
             
         # Try running the command
