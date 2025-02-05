@@ -7,20 +7,12 @@ import shutil
 import subprocess
 import getpass
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
 from src.utils import messages as msg
-
-# ANSI color codes
-RED = "\033[0;31m"
-GREEN = "\033[0;32m"
-YELLOW = "\033[0;33m"
-CLEAR = "\033[0m"
-ORANGE = "\033[38;5;208m"
-
 
 def get_user_home():
     return os.path.expanduser(f"~{getpass.getuser()}")
 
+local_files = f"{get_user_home()}/.sitgrep"
 
 def error(message):
     print(f"{msg.get_error(message)}")
@@ -78,7 +70,6 @@ def run(*args, **kwargs):
         text=True
     )
 
-local_files = f"{get_user_home()}/.sitgrep"
 def install():
     
     try:
