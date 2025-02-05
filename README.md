@@ -1,8 +1,8 @@
 ![HTML Screenshot](assets/sitgrep-slogan.png)
 
-Sitgrep is a wrapper for [Semgrep](https://github.com/semgrep/semgrep) that creates an HTML page that allows you to review findings, remove false positives, and export the sorted results in a JSON format.
+Sitgrep is a wrapper for [Semgrep](https://github.com/semgrep/semgrep) that makes it quick and easy to scan code for insecure coding practices and hard-coded secrets.
 
-There are many benefits to using Sitgrep! Sitgrep provides addtional functionalities to make it easier to download Github and Gitlab packages, review findings quicker, and export results for your client, saving you precious time while on your engagement. Additionally, this can be used locally without sending metrics which makes it viable for scanning proprietary code that is not public, making it perfect for when clients are a bit reluctant to run a static analysis tool on their code base.
+Sitgrep provides functionalities to make it easier to download Github and Gitlab packages, review findings quicker, and export results for your client, saving you precious time while on your engagement. Additionally, this can be used locally without sending metrics which makes it viable for scanning proprietary code that is not public, making it perfect for when clients are a bit reluctant to run a static analysis tool on their code base.
 
 ![HTML Screenshot](assets/dashboard.png)
 ![HTML Screenshot](assets/findings.png)
