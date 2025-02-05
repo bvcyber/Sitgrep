@@ -107,14 +107,6 @@ def install():
 
 def setup():
     
-    if get_os() == "nt":
-        warn("Please use the Docker image when using Sitgrep on Windows.")
-        sys.exit(1)
-
-    if is_user_admin():
-        error("Root user detected. Please run this script as your user, not sudo/root/admin.}")
-        sys.exit(1)
-    
     local_files = f"{get_user_home()}/.sitgrep"
 
     try:
@@ -131,6 +123,15 @@ def setup():
 def prechecks():
 
     try:
+
+        if get_os() == "nt":
+        warn("Please use the Docker image when using Sitgrep on Windows.")
+        sys.exit(1)
+
+        if is_user_admin():
+            error("Root user detected. Please run this script as your user, not sudo/root/admin.}")
+            sys.exit(1)
+            
         # Try running the command
         result = subprocess.run(
             ["python3", "-m", "pip", "--version"],
@@ -148,7 +149,7 @@ def prechecks():
         error("The command 'python3 -m pip --version' failed while doing prechecks")
     except Exception as e:
         error(f"An unknown error occured while doing prechecks.\n{e}")
-
-setup()
+        
 prechecks()
+setup()
 install()
