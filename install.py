@@ -75,7 +75,7 @@ def install():
     try:
         run(["python3", "-m", "pip", "install", "--upgrade", "pip"])
         info("Installing Sitgrep...")
-        install = run(["python3", "-m", "pip", "install", "--user", "-e", ".", "--break-system-packages"])
+        install = run(["python3", "-m", "pip", "install", "-e", ".", "--break-system-packages"])
         if "ERROR" in install.stderr:
             error(install.stderr)
         shutil.copytree("src/rules/", f"{local_files}/rules/", dirs_exist_ok=True)
