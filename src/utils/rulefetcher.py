@@ -9,9 +9,24 @@ import getpass
 from utils import messages as msg
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn
+from rich.traceback import install
+install(show_locals=True)
+console = Console(color_system="truecolor")
 
 user_home = os.path.expanduser(f"~{getpass.getuser()}")
 local_files = f"{user_home}/.sitgrep"
+
+repos =[
+    {
+        "dest":os.path.join(local_files, "rules/semgrep"), 
+        "url": "https://github.com/semgrep/semgrep-rules"
+    },
+    {
+        "dest":os.path.join(local_files, "rules/mindedsecurity"), 
+        "url": "https://github.com/mindedsecurity/semgrep-rules-android-security"
+    }
+]
+
 def hsv_to_rgb(h, s, v):
     """Converts HSV to RGB."""
     if s == 0.0:
@@ -49,9 +64,7 @@ class RuleFetcher:
 
         
     def __init__(self):
-        self.repo_url = "https://github.com/semgrep/semgrep-rules"
         self.origin = local_files
-        self.repo_dest = os.path.join(self.origin, "rules/semgrep")
         self.excluded_folders = []
         self.clone_progress = ProgressBar(target="rule repository")
 
@@ -59,8 +72,11 @@ class RuleFetcher:
         """Excludes specific folders from a directory."""
         return [f for f in os.listdir(directory) if f not in excluded_folders]
 
-    def download_git_repo(self):
+    def download_git_repo(self, url, dest):
         """Downloads the Semgrep rules repository."""
+        self.repo_dest = dest
+        self.repo_url = url
+
         try:
             if not os.path.exists(self.repo_dest):
                 os.mkdir(self.repo_dest)
@@ -72,11 +88,11 @@ class RuleFetcher:
 
         except git.GitCommandError as e:
             print()
-            msg.error(f"Error cloning repository: {e}")
+            msg.error(f"Error cloning repository: ", console)
             sys.exit(1)
         except Exception as e:
             print()
-            msg.error(f"Error cloning repository: {e}")
+            msg.error(f"Error cloning repository: ", console)
             sys.exit(1) 
 
     def is_valid_yaml_file(self, file_path):
@@ -116,8 +132,8 @@ class RuleFetcher:
                                 return False
                         else:
                             return False
-                        for key in ["confidence", "impact", "likelihood"]:
-                            if key not in rule["metadata"]:
+                        for key in ["confidence", "impact", "likelihood"] :
+                            if key not in rule["metadata"] and "owasp-mobile" not in rule["metadata"]:
                                 return False
                     else:
                         return False
@@ -200,19 +216,24 @@ class RuleFetcher:
     def run(self):
         """Runs the complete process: cloning, organizing, pruning."""
         try:
-            status = self.download_git_repo()
+            for repo in repos:
+                status = self.download_git_repo(repo["url"], repo["dest"])
+                try:
+                    if status == 0 and repo["url"] == "https://github.com/semgrep/semgrep-rules":
+                        if os.path.isdir(self.repo_dest + "/contrib/"):
+                            self.organize_rules(self.repo_dest + "/contrib/")
+
+                        if os.path.isdir(self.repo_dest + "/problem-based-packs/"):
+                            self.organize_rules(self.repo_dest + "/problem-based-packs/")
+
+                    self.prune_files(self.repo_dest)
+
+                except Exception as e:
+                    msg.error(f"Error while pruning rule repository: ", console )
+                    sys.exit(1)
+
         except Exception as e:
-            msg.error(f"Error while cloning rule repository: {e}")
+            msg.error(f"Error while cloning rule repository: ", console )
             sys.exit(1)
 
-        if status == 0:
-            if os.path.isdir(self.repo_dest + "/contrib/"):
-                self.organize_rules(self.repo_dest + "/contrib/")
-
-            if os.path.isdir(self.repo_dest + "/problem-based-packs/"):
-                self.organize_rules(self.repo_dest + "/problem-based-packs/")
-
-            self.prune_files(self.repo_dest)
-        else:
-            msg.error("Git clone failed")
-            sys.exit(1)
+   

@@ -1,32 +1,35 @@
+import math
 import subprocess
 import webbrowser
 import json
 import os
 from urllib.parse import urlparse
+import urllib.request
 import time
 import re
 import sys
 import argparse
 import shutil
+import webbrowser
 from utils import messages as msg
 from utils.rulefetcher import RuleFetcher
 from utils.progressbar import ProgressBar
+from packaging import version
 from git import (
     Repo,
 )
 from git.exc import GitCommandError
-import matplotlib
 import numpy as np
+from pathlib import Path
 from rich.text import Text
 from rich.console import Console
-
 from rich.traceback import install
 
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
 
-VERSION = "3.6.9"
+VERSION = "3.6.12"
 TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"
@@ -40,11 +43,18 @@ class BadScanException(Exception):
     def __init__(self):
         super().__init__()
 
+def check_path(filename: str):
+    file_path = Path(filename)
+    if file_path.exists() and (file_path.is_file() or file_path.is_dir()):
+        return 
+    else:
+        raise FileNotFoundError
+    
 
 def scan(dir):
     cmd = []
     cmd_string = ""
-
+    check_path(dir)
     try:
         process = subprocess.Popen(
             ["semgrep", "--version"],
@@ -64,11 +74,11 @@ def scan(dir):
             "--json",
             "--exclude=sitgrep-report*",
             "--exclude=sitgrep-config.json",
-            "--exclude=semgrep-output.json",
+            "--exclude=semgrep_output.json",
             "--exclude=tst",
             "--exclude=tests",
             "--no-git-ignore",
-            f"-o semgrep-scan-{TIMESTR}"
+            f"-o semgrep-scan-{TIMESTR}",
         ]
 
         if VERBOSE_LEVEL > 2:
@@ -84,7 +94,6 @@ def scan(dir):
             )
 
         cmd_string = " ".join(cmd)
-
         output = {}
 
         with subprocess.Popen(
@@ -122,7 +131,6 @@ def scan(dir):
 
                 if (
                     "scanning 0 files" in line.lower()
-                    or "nothing to scan" in line.lower()
                 ):
                     raise BadScanException
 
@@ -131,18 +139,19 @@ def scan(dir):
             with open(f"semgrep-scan-{TIMESTR}") as output:
                 try:
                     output = json.loads(str(output.read()))
-                    os.remove(f"semgrep-scan-{TIMESTR}")  
-                except Exception as e: 
-                    msg.error("",console, True)
+                    os.remove(f"semgrep-scan-{TIMESTR}")
+                except Exception as e:
+                    msg.error("", console)
                     sys.exit(1)
         else:
             raise BadScanException
         save_raw_semgrep_output(output)
+
         if VERBOSE_LEVEL > 0:
             msg.info("-------------- Semgrep output end --------------")
             msg.info(f"Semgrep command used: {cmd_string}")
             msg.info(
-                f"The raw Semgrep JSON output was saved to {os.getcwd()+'/semgrep-output.json'}"
+                f"The raw Semgrep JSON output was saved to {os.getcwd()+'/semgrep_output.json'}"
             )
         msg.info("Scanning complete")
 
@@ -153,11 +162,14 @@ def scan(dir):
         if VERBOSE_LEVEL > 0:
             msg.info("-------------- Semgrep output end --------------")
         msg.error(
-            "Semgrep attempted to scan 0 files. Check if the specified directory is listed in a .gitignore file for the project being scanned. The specified directory or the results may also be empty.", console, False
+            "Semgrep failed to scan successfully. Check if the specified directory is listed in a .gitignore file for the project being scanned. The specified directory or the results may also be empty.",
+            console,
+            False,
         )
+        msg.error(str(bse), console, False)
         msg.info(f"Semgrep command: {cmd_string}")
         try:
-            os.remove(f"semgrep-scan-{TIMESTR}")  
+            os.remove(f"semgrep-scan-{TIMESTR}")
         except:
             pass
         sys.exit(1)
@@ -166,10 +178,10 @@ def scan(dir):
         if VERBOSE_LEVEL > 0:
             msg.info("-------------- Semgrep output end --------------")
 
-        msg.error(f"Semgrep returned with errors: ", console, True)
+        msg.error(f"Semgrep returned with errors: {e.stdout}", console, False)
         msg.info(f"Semgrep command: {cmd_string}")
         try:
-            os.remove(f"semgrep-scan-{TIMESTR}")  
+            os.remove(f"semgrep-scan-{TIMESTR}")
         except:
             pass
         sys.exit(1)
@@ -179,9 +191,9 @@ def scan(dir):
         if VERBOSE_LEVEL > 0:
             msg.info("-------------- Semgrep output end --------------")
             msg.info(f"Semgrep command: {cmd_string}")
-        msg.error(f"An error occurred: ", console, True)
+        msg.error(f"An error occurred", console)
         try:
-            os.remove(f"semgrep-scan-{TIMESTR}")  
+            os.remove(f"semgrep-scan-{TIMESTR}")
         except:
             pass
         sys.exit(1)
@@ -569,10 +581,9 @@ def download_packages(packages: list):
     os.mkdir("Sitgrep_Packages")
     os.chdir("Sitgrep_Packages")
 
-    
     for package in packages:
-        progress_bar = ProgressBar(package["project"], hide=False)
 
+        progress_bar = ProgressBar(target=package["project"], hide=False)
         clone_and_make_config(failed_packages, package, progress_bar)
         progress_bar.stop()
 
@@ -581,17 +592,25 @@ def download_packages(packages: list):
         msg.error("All packages failed to download.", console, False)
 
         for failed_package in failed_packages:
-            msg.error(f'Package {failed_package["project"]}: {failed_package["error"]}', console, False)
+            msg.error(
+                f'Package {failed_package["package"]}: {failed_package["error"]}',
+                console,
+                False,
+            )
 
         sys.exit(1)
 
     else:
         if len(failed_packages) > 0:
             print()
-            msg.error(f"The following packages failed to be downloaded:\n", console, False)
+            msg.error(
+                f"The following packages failed to be downloaded:\n", console, False
+            )
             for failed_package in failed_packages:
                 msg.error(
-                    f'Package {failed_package["project"]}: {failed_package["error"]}', console, False
+                    f'Package {failed_package["package"]}: {failed_package["error"]}',
+                    console,
+                    False,
                 )
             print()
         else:
@@ -733,42 +752,91 @@ def open_dir_in_vscode(dir):
         vscode_link = f"vscode://file/{folder_uri.path}"
         webbrowser.open(vscode_link)
 
+def rgb_gradient(start_rgb, end_rgb, steps):
+    """
+    Generate a list of RGB colors between start_rgb and end_rgb.
+    - start_rgb: tuple (r, g, b) for the starting color
+    - end_rgb: tuple (r, g, b) for the ending color
+    - steps: number of steps in the gradient
+    """
+    gradient = []
+    for step in range(steps):
+        r = int(start_rgb[0] + (end_rgb[0] - start_rgb[0]) * (step / (steps - 1)))
+        g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * (step / (steps - 1)))
+        b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * (step / (steps - 1)))
+        gradient.append(f"rgb({r},{g},{b})")
+    return gradient
+
+
+def generate_rainbow_gradient(steps):
+    # Rainbow colors in RGB
+    rainbow_colors = [
+        # (255, 0, 0),    # Red
+        # (255, 165, 0),  # Orange
+        # (255, 255, 0),  # Yellow
+        (0, 255, 0),    # Green
+        (0, 255, 255),  # Cyan
+        (0, 0, 255),    # Blue
+        # (238, 130, 238) # Violet
+    ]
+    
+    # We want to create a smooth gradient between these colors
+    full_gradient = []
+    
+    # Interpolate between each pair of adjacent rainbow colors
+    for i in range(len(rainbow_colors) - 1):
+        full_gradient.extend(rgb_gradient(rainbow_colors[i], rainbow_colors[i + 1], steps // (len(rainbow_colors) - 1)))
+    
+    return full_gradient
+
 
 def print_banner(directory, output_file):
-    cmap = matplotlib.colormaps["rainbow_r"]
 
     banner = "Context lines: " + str(CONTEXT_LINE_COUNT) + "\n"
     banner += "Directory to scan: " + str(directory) + "\n"
     banner += "Output file: " + str(output_file) + "\n"
     banner += "Version: " + str(VERSION) + "\n"
 
-    banner_len = min(os.get_terminal_size().columns, max([len(a) for a in banner.split("\n")]))
+    banner_len = min(
+        os.get_terminal_size().columns, max([len(a) for a in banner.split("\n")])
+    )
 
-    banner = "\n".join([a.center(banner_len, " ") for a in r"""
+    banner = (
+        "\n".join(
+            [
+                a.center(banner_len, " ")
+                for a in r"""
 ┌─────────────────────┐
 │       Sitgrep       │
 │                     │
 │  Powered by Semgrep │
 └─────────────────────┘
-""".split("\n")]) + "\n" + banner
+""".split("\n")
+            ]
+        )
+        + "\n"
+        + banner
+    )
 
     banner = "-" * banner_len + "\n" + banner + "\n" + "-" * banner_len
-    gradient = np.linspace(0, 1, banner_len)
+
+    # Generate the RGB gradient across the banner length
+    gradient = generate_rainbow_gradient(banner_len)
 
     newbanner = Text("")
-    for line in [a for a in banner.split("\n") if a!=""]:
+
+    for line in [a for a in banner.split("\n") if a != ""]:
         newline = Text("")
-        for (i,chr) in enumerate([a for a in re.split(r"(.)", line) if a!='']):
+        for i, chr in enumerate([a for a in line]):
             try:
-                colorhex = matplotlib.colors.rgb2hex(cmap(gradient[i])) 
-                newline.append(f"{chr}", style=f"{colorhex}")
-            except IndexError: pass
+                color = gradient[i]
+                newline.append(f"{chr}", style=color)
+            except IndexError:
+                pass
         newbanner.append(newline)
         newbanner.append(Text("\n"))
 
-    console = Console(color_system="truecolor")
     console.print(newbanner)
-
 
 
 def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
@@ -876,7 +944,7 @@ def main(args):
             github_packages: list = []
             gitlab_packages: list = []
 
-            if isinstance(args.github, list) and len(args.github) > 0:
+            if hasattr(args, "github") and isinstance(args.github, list) and len(args.github) > 0:
                 github_packages = get_package_list(args.github)
                 github_packages = strip_package_names(github_packages)
                 github_packages = split_packages(github_packages, mode="github")
@@ -885,7 +953,7 @@ def main(args):
                     if not ("Sitgrep_Packages" in directory)
                     else directory
                 )
-            if isinstance(args.gitlab, list) and len(args.gitlab) > 0:
+            if hasattr(args, "gitlab") and isinstance(args.gitlab, list) and len(args.gitlab) > 0:
                 gitlab_packages = get_package_list(args.gitlab)
                 gitlab_packages = strip_package_names(gitlab_packages)
                 gitlab_packages = split_packages(gitlab_packages, mode="gitlab")
@@ -899,10 +967,10 @@ def main(args):
 
         else:
             directory = os.path.abspath(directory)
-            if not os.path.isdir(directory):
+            if not os.path.isdir(directory) and not os.path.isfile(directory):
                 raise (FileNotFoundError)
     except FileNotFoundError:
-        msg.error(f"The directory specified could not be found: {directory}", console, False)
+        msg.error(f"The file or directory specified could not be found: {directory}", console, False)
         sys.exit(1)
     except Exception as e:
         if hasattr(args, "github") or hasattr(args, "gitlab"):
