@@ -24,12 +24,13 @@ from pathlib import Path
 from rich.text import Text
 from rich.console import Console
 from rich.traceback import install
+import rs_chardet
 
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
 
-VERSION = "3.6.12"
+VERSION = "3.6.13"
 TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"
@@ -43,13 +44,21 @@ class BadScanException(Exception):
     def __init__(self):
         super().__init__()
 
+
 def check_path(filename: str):
     file_path = Path(filename)
     if file_path.exists() and (file_path.is_file() or file_path.is_dir()):
-        return 
+        return
     else:
         raise FileNotFoundError
-    
+
+
+def detect_encoding(file_path):
+    with open(file_path, "rb") as file:
+        raw_data = file.read(10000)
+    result = rs_chardet.detect_rs_enc_name(raw_data)
+    return result
+
 
 def scan(dir):
     cmd = []
@@ -129,9 +138,7 @@ def scan(dir):
                         if '{"errors' not in line:
                             print(line.strip(), flush=True)
 
-                if (
-                    "scanning 0 files" in line.lower()
-                ):
+                if "scanning 0 files" in line.lower():
                     raise BadScanException
 
         process.wait()
@@ -235,7 +242,8 @@ def process_json(results, dir, packages) -> dict:
             if "owasp" not in result["extra"]["metadata"]:
                 result["extra"]["metadata"]["owasp"] = "N/A"
 
-            with open(file_path, "r") as f:
+            encoding = detect_encoding(file_path)
+            with open(file_path, "r", encoding=encoding) as f:
                 file_text = f.read()
 
                 start_line = result["start"]["line"]
@@ -301,7 +309,9 @@ def process_json(results, dir, packages) -> dict:
 
         return json_results
     except KeyError as k:
-        msg.error(f"The following key could not be found while parsing JSON: ", console, True)
+        msg.error(
+            f"The following key could not be found while parsing JSON: ", console, True
+        )
         sys.exit(1)
     except Exception as e:
         msg.error(f"Error parsing JSON: ", console, True)
@@ -564,10 +574,16 @@ def clone_and_make_config(failed_packages, package_details, progress_bar):
 
     except GitCommandError as e:
         progress_bar.stop()
-        handle_failed_package(failed_packages, project_name, f"The repository wasn't found, you do not have access, or another error occurred. {e}")
+        handle_failed_package(
+            failed_packages,
+            project_name,
+            f"The repository wasn't found, you do not have access, or another error occurred. {e}",
+        )
     except Exception as e:
         progress_bar.stop()
-        handle_failed_package(failed_packages, project_name, f"Error while downloading package - {e}")
+        handle_failed_package(
+            failed_packages, project_name, f"Error while downloading package - {e}"
+        )
 
 
 def download_packages(packages: list):
@@ -618,6 +634,7 @@ def download_packages(packages: list):
                 f"Successfully downloaded {len(packages)-len(failed_packages)} package(s)\n"
             )
 
+
 def is_valid_package_name(package: str):
     pattern = r"^[a-zA-Z0-9-_/.]+(::[a-zA-Z0-9-_/.]+)?$"
     return bool(re.match(pattern, package.strip()))
@@ -636,10 +653,10 @@ def split_packages(packages: list, mode: str):
 
                 split_packages.append(
                     {
-                        "path": parsed_github_url["path"], # type: ignore
-                        "project": parsed_github_url["project"], # type: ignore
-                        "branch": parsed_github_url["branch"], # type: ignore
-                        "user": parsed_github_url["user"], # type: ignore
+                        "path": parsed_github_url["path"],  # type: ignore
+                        "project": parsed_github_url["project"],  # type: ignore
+                        "branch": parsed_github_url["branch"],  # type: ignore
+                        "user": parsed_github_url["user"],  # type: ignore
                         "site": "github",
                     }
                 )
@@ -653,18 +670,20 @@ def split_packages(packages: list, mode: str):
 
                 split_packages.append(
                     {
-                        "path": parsed_gitlab_url["path"], # type: ignore
-                        "project": parsed_gitlab_url["project"], # type: ignore
-                        "branch": parsed_gitlab_url["branch"], # type: ignore
-                        "user": parsed_gitlab_url["user"], # type: ignore
+                        "path": parsed_gitlab_url["path"],  # type: ignore
+                        "project": parsed_gitlab_url["project"],  # type: ignore
+                        "branch": parsed_gitlab_url["branch"],  # type: ignore
+                        "user": parsed_gitlab_url["user"],  # type: ignore
                         "site": "gitlab",
                     }
                 )
             else:
-                msg.error(f"Could not parse URL. Only Github and Gitlab links are currently supported.", console, False)
-                msg.info(
-                    f"Please report this so this usecase can be added."
+                msg.error(
+                    f"Could not parse URL. Only Github and Gitlab links are currently supported.",
+                    console,
+                    False,
                 )
+                msg.info(f"Please report this so this usecase can be added.")
         else:
             msg.error(f"Unable to parse package: {package}", console, False)
 
@@ -691,7 +710,9 @@ def get_package_list(packages):
 
     else:
         msg.error(
-            f"Unsupported type: Expected a text file or a list of packages, not {type(packages)}", console, False
+            f"Unsupported type: Expected a text file or a list of packages, not {type(packages)}",
+            console,
+            False,
         )
         sys.exit(1)
 
@@ -752,6 +773,7 @@ def open_dir_in_vscode(dir):
         vscode_link = f"vscode://file/{folder_uri.path}"
         webbrowser.open(vscode_link)
 
+
 def rgb_gradient(start_rgb, end_rgb, steps):
     """
     Generate a list of RGB colors between start_rgb and end_rgb.
@@ -774,19 +796,25 @@ def generate_rainbow_gradient(steps):
         # (255, 0, 0),    # Red
         # (255, 165, 0),  # Orange
         # (255, 255, 0),  # Yellow
-        (0, 255, 0),    # Green
+        (0, 255, 0),  # Green
         (0, 255, 255),  # Cyan
-        (0, 0, 255),    # Blue
+        (0, 0, 255),  # Blue
         # (238, 130, 238) # Violet
     ]
-    
+
     # We want to create a smooth gradient between these colors
     full_gradient = []
-    
+
     # Interpolate between each pair of adjacent rainbow colors
     for i in range(len(rainbow_colors) - 1):
-        full_gradient.extend(rgb_gradient(rainbow_colors[i], rainbow_colors[i + 1], steps // (len(rainbow_colors) - 1)))
-    
+        full_gradient.extend(
+            rgb_gradient(
+                rainbow_colors[i],
+                rainbow_colors[i + 1],
+                steps // (len(rainbow_colors) - 1),
+            )
+        )
+
     return full_gradient
 
 
@@ -811,7 +839,9 @@ def print_banner(directory, output_file):
 │                     │
 │  Powered by Semgrep │
 └─────────────────────┘
-""".split("\n")
+""".split(
+                    "\n"
+                )
             ]
         )
         + "\n"
@@ -853,7 +883,11 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
     try:
         if "results" in scan_results and len(scan_results["results"]) > 0:
             save_results(scan_results, output_file, directory, packages)
-            if not hasattr(args, "github") and not hasattr(args, "gitlab") and hasattr(args, "vscode"):
+            if (
+                not hasattr(args, "github")
+                and not hasattr(args, "gitlab")
+                and hasattr(args, "vscode")
+            ):
                 open_dir_in_vscode(dir=directory)
         elif (
             "results" in scan_results
@@ -868,15 +902,25 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
                 ):
                     valid_errors.append(error)
             if len(valid_errors) > 0:
-                msg.error("Semgrep encountered errors and returned no results:", console, False)
+                msg.error(
+                    "Semgrep encountered errors and returned no results:",
+                    console,
+                    False,
+                )
                 msg.error(valid_errors, console, False)
             else:
                 msg.success("Congrats, there were no findings.")
-        elif "results" not in scan_results and "errors" not in scan_results and "paths" not in scan_results:
+        elif (
+            "results" not in scan_results
+            and "errors" not in scan_results
+            and "paths" not in scan_results
+        ):
             msg.error(
-                "There was an error with Semgrep and the results returned null. Please report this issue.", console, False
+                "There was an error with Semgrep and the results returned null. Please report this issue.",
+                console,
+                False,
             )
-        
+
     except Exception as e:
         msg.error(f"There was an error: ", console, True)
 
@@ -925,7 +969,9 @@ def main(args):
                 sys.exit(0)
             else:
                 msg.error(
-                    f"The JSON could not be found at the given path: {expanded_filepath}", console, False
+                    f"The JSON could not be found at the given path: {expanded_filepath}",
+                    console,
+                    False,
                 )
         except Exception as e:
             msg.error(f"There was an error loading the JSON file: ", console, True)
@@ -935,16 +981,17 @@ def main(args):
     try:
         if not hasattr(args, "github") and not hasattr(args, "github"):
             packages = get_packages_from_dir(directory)
-        elif (
-            hasattr(args, "github")
-            or hasattr(args, "gitlab")
-        ):
+        elif hasattr(args, "github") or hasattr(args, "gitlab"):
             ALLOW_DOWNLOAD = True
 
             github_packages: list = []
             gitlab_packages: list = []
 
-            if hasattr(args, "github") and isinstance(args.github, list) and len(args.github) > 0:
+            if (
+                hasattr(args, "github")
+                and isinstance(args.github, list)
+                and len(args.github) > 0
+            ):
                 github_packages = get_package_list(args.github)
                 github_packages = strip_package_names(github_packages)
                 github_packages = split_packages(github_packages, mode="github")
@@ -953,7 +1000,11 @@ def main(args):
                     if not ("Sitgrep_Packages" in directory)
                     else directory
                 )
-            if hasattr(args, "gitlab") and isinstance(args.gitlab, list) and len(args.gitlab) > 0:
+            if (
+                hasattr(args, "gitlab")
+                and isinstance(args.gitlab, list)
+                and len(args.gitlab) > 0
+            ):
                 gitlab_packages = get_package_list(args.gitlab)
                 gitlab_packages = strip_package_names(gitlab_packages)
                 gitlab_packages = split_packages(gitlab_packages, mode="gitlab")
@@ -970,14 +1021,20 @@ def main(args):
             if not os.path.isdir(directory) and not os.path.isfile(directory):
                 raise (FileNotFoundError)
     except FileNotFoundError:
-        msg.error(f"The file or directory specified could not be found: {directory}", console, False)
+        msg.error(
+            f"The file or directory specified could not be found: {directory}",
+            console,
+            False,
+        )
         sys.exit(1)
     except Exception as e:
         if hasattr(args, "github") or hasattr(args, "gitlab"):
             msg.error(f"There was an error gathering package data: ", console, True)
         else:
             msg.error(
-                f"There was an error parsing the directory of the package: ", console, True
+                f"There was an error parsing the directory of the package: ",
+                console,
+                True,
             )
         sys.exit(1)
 
@@ -985,7 +1042,9 @@ def main(args):
         msg.error("The directory specified could not be found", console, False)
         sys.exit(1)
     except Exception as e:
-        msg.error(f"There was an error parsing the directory of the package: ", console, True)
+        msg.error(
+            f"There was an error parsing the directory of the package: ", console, True
+        )
         sys.exit(1)
 
     print_banner(directory=directory, output_file=output_file)
@@ -1149,7 +1208,9 @@ def cli():
         msg.warn("Detected keyboard interrupt. Exiting...")
     except MemoryError:
         msg.error(
-            "Ran out of memory. Please report this package for further investigation.", console, False
+            "Ran out of memory. Please report this package for further investigation.",
+            console,
+            False,
         )
     except Exception as e:
         msg.error(f"An unknown exception occured: ", console, True)

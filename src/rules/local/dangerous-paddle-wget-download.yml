@@ -1,0 +1,69 @@
+rules:
+  - id: dangerous-paddle-wget-download
+    message: Detected `_wget_download` function with an argument that could contain
+      user input. If this data can be controlled by a malicious actor, it may be
+      an instance of command injection.
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - focus-metavariable: 
+              - $URL
+              - $FUNC
+          - pattern-either:
+              - pattern: |
+                  $URL = $FUNC(...)
+              - pattern: |
+                  def $FUNC(..., $URL, ...):
+                    ...
+              - pattern: |
+                  "$STR" + $URL
+              - pattern: |
+                  "$STR" += $URL    
+              - pattern: |
+                  "$STR" % $URL
+              - pattern: |
+                  "$STR".format($URL)
+              - pattern: |
+                  f"...{$URL}..."
+          - pattern-not: |
+              "$STR" + "..."
+          - pattern-not: |
+              $URL = "..."
+          - pattern-not: |
+              "$STR" += "..."   
+          - pattern-not: |
+              "$STR" % "..."
+          - pattern-not: |
+              "$STR".format("...")
+    pattern-sinks:
+      - patterns:
+          - focus-metavariable: $URL
+          - pattern-either:
+              - pattern: paddle.utils.download._wget_download($URL, ...)
+          - pattern-not: |
+              paddle.utils.download._wget_download("...", ...)
+    metadata:
+      author: John Ascher (Security Innovation)
+      owasp:
+        - A01:2017 - Injection
+        - A03:2021 - Injection
+      cwe:
+        - "CWE-78: Improper Neutralization of Special Elements used in an OS
+          Command ('OS Command Injection')"
+      references:
+        - https://github.com/advisories/GHSA-qqv2-35q8-p2g2
+      category: security
+      technology:
+        - python
+      cwe2022-top25: true
+      cwe2021-top25: true
+      subcategory:
+        - vuln
+      likelihood: HIGH
+      impact: MEDIUM
+      confidence: MEDIUM
+      vulnerability_class:
+        - Command Injection
+    languages:
+      - python
+    severity: ERROR
