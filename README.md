@@ -144,4 +144,3 @@ If you want to add your own rules, put them in the `.sitgrep/rules/local/` folde
 - Semgrep engine: [Semgrep](https://github.com/semgrep/)
 - Semgrep rules: [Semgrep rules registry](https://github.com/semgrep/semgrep-rules) by Semgrep
 - Android rules: [MindedSecurity rules registry](https://github.com/mindedsecurity/semgrep-rules-android-security) by IMQ Minded Security
-- Smart contract rules: [Decurity rules registry](https://github.com/Decurity/semgrep-smart-contracts) by Decurity
