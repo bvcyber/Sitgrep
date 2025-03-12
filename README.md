@@ -144,3 +144,4 @@ If you want to add your own rules, put them in the `.sitgrep/rules/local/` folde
 - Semgrep engine: [Semgrep](https://github.com/semgrep/)
 - Semgrep rules: [Semgrep rules registry](https://github.com/semgrep/semgrep-rules) by Semgrep
 - Android rules: [MindedSecurity rules registry](https://github.com/mindedsecurity/semgrep-rules-android-security) by IMQ Minded Security
+- Mobile rules: [insideapp-oss rules registry](https://github.com/insideapp-oss/mobile-application-security-rules) by insideapp-oss

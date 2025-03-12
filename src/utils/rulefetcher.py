@@ -24,6 +24,10 @@ repos =[
     {
         "dest":os.path.join(local_files, "rules/mindedsecurity"), 
         "url": "https://github.com/mindedsecurity/semgrep-rules-android-security"
+    },
+    {
+        "dest":os.path.join(local_files, "rules/insideapp-oss"), 
+        "url": "https://github.com/insideapp-oss/mobile-application-security-rules"
     }
 ]
 
