@@ -143,5 +143,5 @@ If you want to add your own rules, put them in the `.sitgrep/rules/local/` folde
 - Original author and current maintainer: [John Ascher @ Security Innovation](https://github.com/S0meday)
 - Semgrep engine: [Semgrep](https://github.com/semgrep/)
 - Semgrep rules: [Semgrep rules registry](https://github.com/semgrep/semgrep-rules) by Semgrep
-- Android rules: [Android rules registry](https://github.com/mindedsecurity/semgrep-rules-android-security) by IMQ Minded Security
-
+- Android rules: [MindedSecurity rules registry](https://github.com/mindedsecurity/semgrep-rules-android-security) by IMQ Minded Security
+- Smart contract rules: [Decurity rules registry](https://github.com/Decurity/semgrep-smart-contracts) by Decurity
