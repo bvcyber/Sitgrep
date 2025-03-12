@@ -140,7 +140,8 @@ If contributing Semgrep rules, please use Semgrep's rule playground to write and
 If you want to add your own rules, put them in the `.sitgrep/rules/local/` folder
 
 # Authors and acknowledgment
-- Original author and current maintainer: [John Ascher](https://github.com/S0meday)
+- Original author and current maintainer: [John Ascher @ Security Innovation](https://github.com/S0meday)
 - Semgrep engine: [Semgrep](https://github.com/semgrep/)
 - Semgrep rules: [Semgrep rules registry](https://github.com/semgrep/semgrep-rules) by Semgrep
+- Android rules: [Android rules registry](https://github.com/mindedsecurity/semgrep-rules-android-security) by IMQ Minded Security
 
