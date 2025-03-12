@@ -24,6 +24,10 @@ repos =[
     {
         "dest":os.path.join(local_files, "rules/mindedsecurity"), 
         "url": "https://github.com/mindedsecurity/semgrep-rules-android-security"
+    },
+    {
+        "dest":os.path.join(local_files, "rules/Decurity"),
+        "url":"https://github.com/Decurity/semgrep-smart-contracts"
     }
 ]
 
