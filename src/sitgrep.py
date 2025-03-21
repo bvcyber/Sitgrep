@@ -258,8 +258,10 @@ def process_json(results, dir, packages) -> dict:
 
                 context = "\n".join(context)
 
+                home_len = len((INSTALL_DIR).split("/"))
                 rule_id = result["check_id"].split(".")
-                rule_id = rule_id[-1]
+                rule_id = rule_id[home_len+1:]
+                rule_id = ".".join(rule_id)
 
                 rule_index = get_rule_index(json_results["results"], rule_id)
 
