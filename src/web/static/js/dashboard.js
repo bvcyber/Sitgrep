@@ -132,12 +132,12 @@ function getPackageData() {
   sitgrepResults.forEach(group => {
     group.findings.forEach(finding => {
       for (let obj of packageList) {
-        if (finding.package == obj.package) {
-          if (tempData.hasOwnProperty(obj.package)){
-            tempData[obj.package] += 1;
+        if (finding.package == obj.project) {
+          if (tempData.hasOwnProperty(obj.project)){
+            tempData[obj.project] += 1;
           }
           else {
-            tempData[obj.package] = 1;
+            tempData[obj.project] = 1;
           }
         }
       }
