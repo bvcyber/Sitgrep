@@ -129,9 +129,9 @@ class SourceHandler:
         self.repo_url = url
 
         try:
-            if not os.path.exists(self.repo_dest):
-                os.mkdir(self.repo_dest)
-            shutil.rmtree(self.repo_dest)
+            if os.path.exists(self.repo_dest):
+                shutil.rmtree(self.repo_dest)
+                
             git.Repo.clone_from(self.repo_url, self.repo_dest, branch=None, progress=self.clone_progress)   # type: ignore
   
             msg.info(f"Repository cloned successfully to {self.repo_dest}")
