@@ -20,7 +20,7 @@ Sitgrep offers an intuitive solution for scanning GitHub and GitLab repositories
     ```
 4. Run the rule fetcher to download rules locally:
     ```
-    sitgrep fetch
+    sitgrep sources fetch
     ```
 
 ## Docker
@@ -54,7 +54,7 @@ python3 -m pip uninstall sitgrep
 
 # Usage
 ```
-sitgrep {local} [options] 
+sitgrep {local,sources} [options] 
 
 Example: sitgrep -c 2 -d ~/my/dir/ -o output_file 
 
@@ -106,6 +106,29 @@ or
 
 Note: `--github` overrides the `-d/--directory` parameter
 
+## Source Management
+Sitgrep offers a way to dynamically add, delete, and list sources:
+
+AddSource - Adds a new source by specifying a name and URL to the source repository
+
+```
+sitgrep sources add --name <src> --url <path_to_src_repo>
+```
+
+DeleteSource - Deletes a source with a given name
+```
+sitgrep sources delete --name <src>
+```
+
+ListSources - List all sources
+```
+sitgrep sources list
+```
+
+RestoreSources - Restore the original source list
+```
+sitgrep sources restore
+```
 
 ### How to create list.txt?
 The `--github/--gitlab` parameter looks for a text file or a list of Github/Gitlab URLs. 

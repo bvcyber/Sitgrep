@@ -12,7 +12,7 @@ import argparse
 import shutil
 import webbrowser
 from utils import messages as msg
-from utils.rulefetcher import RuleFetcher
+from src.utils.source_handler import RuleFetcher
 from utils.progressbar import ProgressBar
 from packaging import version
 from git import (
@@ -30,7 +30,7 @@ install(show_locals=True)
 console = Console(color_system="truecolor")
 
 
-VERSION = "3.6.13"
+VERSION = "3.7.0"
 TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"

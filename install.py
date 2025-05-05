@@ -6,6 +6,7 @@ import sys
 import shutil
 import subprocess
 import getpass
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 from src.utils import messages as msg
 
@@ -78,19 +79,26 @@ def install():
         install = run(["python3", "-m", "pip", "install", "-e", ".", "--break-system-packages"])
         if "ERROR" in install.stderr:
             error(install.stderr)
-        shutil.copytree("src/rules/", f"{local_files}/rules/", dirs_exist_ok=True)
-        shutil.copytree("src/web", f"{local_files}/web", dirs_exist_ok=True)
+        info("Copying files...")
+        shutil.copytree(src="src/rules", dst=f"{local_files}/rules", dirs_exist_ok=True)
+        shutil.copytree(src="src/web", dst=f"{local_files}/web", dirs_exist_ok=True)
+        if not os.path.isfile(f"{local_files}/config/sources.json"):
+            shutil.copytree(src="src/config", dst=f"{local_files}/config", dirs_exist_ok=True)
+        else:
+            info("Config found, not overwriting current config")
+            shutil.copy(src="src/config/.sources.json", dst=f"{local_files}/config/.sources.json")
+
         
     except Exception as e:
         install_error(sys.exc_info()[-1].tb_lineno, e)
 
     success("Installation successful")
     print()
-    warn("Run 'sitgrep fetch' to download rules to use locally")
+    warn("Run 'sitgrep sources fetch' to download rules to use locally")
 
 
     print("\nFor usage details, read README.md or run the following command:\n")
-    print("sitgrep -h")
+    print("sitgrep --help")
 
     print()
     sys.stdout.flush()
@@ -100,10 +108,20 @@ def install():
 def setup():
     
     try:
-
         if os.path.isdir(local_files):
             info("Installation found. Overwriting current installation...")
-            shutil.rmtree(local_files)
+            preserve = "config"
+
+            for item in os.listdir(local_files):
+                item_path = os.path.join(local_files, item)
+                
+                if item == preserve:
+                    continue
+                
+                if os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                else:
+                    os.remove(item_path)
 
         os.makedirs(local_files, exist_ok=True)
 
@@ -139,6 +157,7 @@ def prechecks():
     except Exception as e:
         error(f"An unknown error occured while doing prechecks.\n{e}")
 
-prechecks()
-setup()
-install()
+if __name__ == "__main__":
+    prechecks()
+    setup()
+    install()
