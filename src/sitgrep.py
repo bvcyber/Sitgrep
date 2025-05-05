@@ -949,10 +949,6 @@ def main(args):
     else:
         output_file = f"sitgrep-{args.output}"
 
-    if hasattr(args, "subcommands") and args.subcommands == "fetch":
-        RuleFetcher().run()
-        sys.exit(0)
-
     if hasattr(args, "json_input") and args.json_input:
         if args.subcommands == "local":
             LOCAL_MODE = True
