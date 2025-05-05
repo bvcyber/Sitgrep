@@ -12,7 +12,7 @@ import argparse
 import shutil
 import webbrowser
 from utils import messages as msg
-from src.utils.source_handler import RuleFetcher
+from src.utils.source_handler import SourceHandler
 from utils.progressbar import ProgressBar
 from packaging import version
 from git import (
