@@ -131,7 +131,7 @@ class SourceHandler:
         try:
             if os.path.exists(self.repo_dest):
                 shutil.rmtree(self.repo_dest)
-                
+
             git.Repo.clone_from(self.repo_url, self.repo_dest, branch=None, progress=self.clone_progress)   # type: ignore
   
             msg.info(f"Repository cloned successfully to {self.repo_dest}")
@@ -274,11 +274,11 @@ class SourceHandler:
                 status = self.download_git_repo(repo["url"], repo["name"])
                 try:
                     if status == 0 and repo["url"] == "https://github.com/semgrep/semgrep-rules":
-                        if os.path.isdir(self.repo_dest + "/contrib/"):
-                            self.organize_rules(self.repo_dest + "/contrib/")
+                        if os.path.isdir(os.path.join(self.repo_dest, "contrib")):
+                            self.organize_rules(os.path.join(self.repo_dest, "contrib"))
 
-                        if os.path.isdir(self.repo_dest + "/problem-based-packs/"):
-                            self.organize_rules(self.repo_dest + "/problem-based-packs/")
+                        if os.path.isdir(os.path.join(self.repo_dest, "problem-based-packs")):
+                            self.organize_rules(os.path.join(self.repo_dest, "problem-based-packs"))
 
                     self.prune_files(self.repo_dest)
 
