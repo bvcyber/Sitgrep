@@ -1063,10 +1063,30 @@ def cli():
         help="Use local rules instead of official Semgrep rules. Run 'sitgrep local -h' for more info.",
     )
 
-    fetch_parser = subparsers.add_parser(
-        "fetch",
-        help="Fetch the latest ruleset.",
+    source_handler = SourceHandler()
+    sources_parser = subparsers.add_parser(
+        "sources",
+        help="Manage sources",
     )
+    sources_subparsers = sources_parser.add_subparsers(dest='action', required=True)
+
+    update_parser = sources_subparsers.add_parser('add', help='Add a source')
+    update_parser.add_argument('--name', required=True, help='Name of the source')
+    update_parser.add_argument('--url', required=True, help='URL of the source')
+    update_parser.set_defaults(func=source_handler.add_source)
+
+    delete_parser = sources_subparsers.add_parser('delete', help='Delete a source')
+    delete_parser.add_argument('--name', required=True, help='Name of the source')
+    delete_parser.set_defaults(func=source_handler.delete_source)
+
+    list_parser = sources_subparsers.add_parser('list', help='List all sources')
+    list_parser.set_defaults(func=source_handler.list_sources)
+
+    restore_parser = sources_subparsers.add_parser('restore', help='Restore original sources')
+    restore_parser.set_defaults(func=source_handler.restore_sources)
+
+    fetch_parser = sources_subparsers.add_parser('fetch', help='Fetch all sources')
+    fetch_parser.set_defaults(func=source_handler.fetch_sources)
 
     local_parser.add_argument(
         "-d",
