@@ -3,7 +3,7 @@ import shutil
 from utils.progressbar import ProgressBar
 import yaml
 import sys
-import importlib
+import json
 import git
 import getpass
 from utils import messages as msg
@@ -13,23 +13,11 @@ from rich.traceback import install
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
-user_home = os.path.expanduser(f"~{getpass.getuser()}")
-local_files = f"{user_home}/.sitgrep"
-
-repos =[
-    {
-        "dest":os.path.join(local_files, "rules/semgrep"), 
-        "url": "https://github.com/semgrep/semgrep-rules"
-    },
-    {
-        "dest":os.path.join(local_files, "rules/mindedsecurity"), 
-        "url": "https://github.com/mindedsecurity/semgrep-rules-android-security"
-    },
-    {
-        "dest":os.path.join(local_files, "rules/insideapp-oss"), 
-        "url": "https://github.com/insideapp-oss/mobile-application-security-rules"
-    }
-]
+USER_HOME = os.path.expanduser(f"~{getpass.getuser()}")
+LOCAL_FILES = f"{USER_HOME}/.sitgrep"
+LOCAL_RULES = f"{LOCAL_FILES}/rules/"
+SOURCES_PATH = os.path.join(LOCAL_FILES, "config", "sources.json")
+SOURCES_BAK_PATH = os.path.join(LOCAL_FILES, "config", ".sources.json")
 
 def hsv_to_rgb(h, s, v):
     """Converts HSV to RGB."""
@@ -63,14 +51,73 @@ def rgb_to_hex(rgb):
     """Converts RGB to a hex color code."""
     return "#{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2])
 
+def src_json(src):
+    return {"sources": src}
 
-class RuleFetcher:
+def get_sources(path = SOURCES_PATH) -> list:
 
-        
+    try:
+        sources = []
+        with open(path, "r") as f:
+            sources = json.load(f)["sources"]
+        return sources
+    except FileNotFoundError:
+        print("sources.json not found.")
+        return sources
+    except json.JSONDecodeError:
+        print("sources.json is not valid JSON.")
+        return sources
+
+
+class SourceHandler:
+
     def __init__(self):
-        self.origin = local_files
+        self.origin = LOCAL_FILES
         self.excluded_folders = []
         self.clone_progress = ProgressBar(target="rule repository")
+    
+    def add_source(self, args):
+        msg.info(f"Adding source, name: {args.name}, url: {args.url}")
+        
+        new_src = {}
+        new_src["name"] = args.name
+        new_src["url"] = args.url
+
+        sources = get_sources()
+        sources.append(new_src)
+
+        with open(SOURCES_PATH, "w") as f:
+            json.dump(src_json(sources), f, indent=2)
+        
+        sys.exit(0)
+
+    def delete_source(self, args):
+        msg.info(f"Deleting source, name: {args.name}")
+
+        sources = get_sources()
+
+        for index, source in enumerate(sources):
+            if source["name"] == args.name:
+                del sources[index]
+                break
+        
+        with open(SOURCES_PATH, "w") as f:
+            json.dump(src_json(sources), f, indent=2)
+
+        sys.exit(0)
+
+    def restore_sources(self, args):
+        msg.info(f"Restoring original sources")
+        sources = get_sources(SOURCES_BAK_PATH)
+        with open(SOURCES_PATH, "w") as f:
+            json.dump(src_json(sources), f, indent=2)
+
+        sys.exit(0)
+
+    def list_sources(self, args):
+        sources = get_sources()
+        print(json.dumps(sources, indent=2))
+        sys.exit(0)
 
     def exclude_folders(self, directory, excluded_folders):
         """Excludes specific folders from a directory."""
@@ -78,7 +125,7 @@ class RuleFetcher:
 
     def download_git_repo(self, url, dest):
         """Downloads the Semgrep rules repository."""
-        self.repo_dest = dest
+        self.repo_dest = os.path.join(LOCAL_FILES, "rules", dest)
         self.repo_url = url
 
         try:
@@ -187,6 +234,9 @@ class RuleFetcher:
             if os.path.exists(f"{directory}.github"):
                 shutil.rmtree(f"{directory}.github")
                 
+        # print(f"\nPruned {count} files")
+        # print(f"Kept {total - count} files")
+
     def organize_rules(self, directory):
         """Organizes the rules by their language."""
         count = 0
@@ -217,11 +267,11 @@ class RuleFetcher:
         # msg.info(f"Organized {count} files")
         shutil.rmtree(directory)
 
-    def run(self):
+    def fetch_sources(self, args):
         """Runs the complete process: cloning, organizing, pruning."""
         try:
-            for repo in repos:
-                status = self.download_git_repo(repo["url"], repo["dest"])
+            for repo in get_sources():
+                status = self.download_git_repo(repo["url"], repo["name"])
                 try:
                     if status == 0 and repo["url"] == "https://github.com/semgrep/semgrep-rules":
                         if os.path.isdir(self.repo_dest + "/contrib/"):
@@ -235,6 +285,7 @@ class RuleFetcher:
                 except Exception as e:
                     msg.error(f"Error while pruning rule repository: ", console )
                     sys.exit(1)
+            sys.exit(0)
 
         except Exception as e:
             msg.error(f"Error while cloning rule repository: ", console )
