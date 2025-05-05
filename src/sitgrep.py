@@ -1219,6 +1219,8 @@ def cli():
     )
 
     args = parser.parse_args()
+    if hasattr(args, "func"):
+        args.func(args)
     try:
         main(args)
     except KeyboardInterrupt:
