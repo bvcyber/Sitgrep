@@ -159,7 +159,7 @@ function buildFinding(finding, resultsDiv, shouldHide) {
     let linkLine = start === end ? `L${start}` : `L${start}-L${end}`;
     const link = generatePackageUrl(packageList, file, linkLine, fullFile);
 
-    resultsDiv.appendChild(PACKAGES ? finding_template_linked(file, line, findingId, link) : finding_template(file, line, findingId));
+    resultsDiv.appendChild(finding_template_linked(file, line, findingId, link));
 
     let contextDivs = resultsDiv.querySelectorAll(".context");
     let latestFinding = contextDivs[contextDivs.length - 1];
@@ -1010,7 +1010,14 @@ function generatePackageUrl(packages, file, line, fullFile) {
             }
         }
         else {
-            //console.log(file)
+            let lineNumber = line.replace("L", "")
+            let lineSplit = line.split("-")
+
+            if(lineSplit.length == 2){
+                lineNumber = lineSplit[0].replace("L", "")
+            }
+
+            fileUrl = `vscode://file/${fullFile}:${lineNumber}`
         }
     } catch (e) {
         console.error(`There was an issue generating package links for filepath ${fileOg} : ${e}`);
