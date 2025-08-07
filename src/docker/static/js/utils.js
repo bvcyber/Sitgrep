@@ -68,7 +68,7 @@ function getLanguageByExtension(filePath) {
   
     const ext = filePath.split('.').pop().toLowerCase();
     return languageMap[ext] || "cs";
-  }
+}
 
 function isCutValueExists(list, cutValue) {
     return list.some(function (item) {

@@ -1,36 +1,38 @@
-import math
-import subprocess
-import webbrowser
-import json
 import os
-from urllib.parse import urlparse
-import urllib.request
-import time
 import re
 import sys
-import argparse
+import json
+import time
+import shlex
 import shutil
+import argparse
+import subprocess
 import webbrowser
-from utils import messages as msg
-from src.utils.source_handler import SourceHandler
-from utils.progressbar import ProgressBar
+import urllib.request
 from packaging import version
-from git import (
-    Repo,
-)
-from git.exc import GitCommandError
-import numpy as np
+from urllib.parse import urlparse
+from utils import messages as msg
+from utils.progressbar import ProgressBar
+from utils.source_handler import SourceHandler
+from git import Repo
+import rs_chardet
 from pathlib import Path
 from rich.text import Text
+from rich.text import Text
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.prompt import Prompt
 from rich.console import Console
 from rich.traceback import install
-import rs_chardet
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from git.exc import GitCommandError
+from utils.archive_handler import extract_if_archive
+from rich_argparse import RichHelpFormatter
 
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
-
-VERSION = "3.7.0"
+VERSION = "3.7.3"
 TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"
@@ -38,6 +40,8 @@ LOCAL_MODE = False
 NO_OPEN = False
 VERBOSE_LEVEL = 0
 CONTEXT_LINE_COUNT = 5
+MODES = ["GENERAL", "MOBILE"]
+PROTOCOLS = ["SSH", "HTTPS"]
 
 
 class BadScanException(Exception):
@@ -53,14 +57,85 @@ def check_path(filename: str):
         raise FileNotFoundError
 
 
-def detect_encoding(file_path):
+def validate_choices(value: str) -> list:
+    choices = value.split(",")
+    for choice in choices:
+        if str(choice).upper() not in MODES:
+            raise argparse.ArgumentTypeError(
+                f"Invalid choice: {value}. Choose from {MODES}"
+            )
+    return choices
+
+
+def detect_encoding(file_path: str):
     with open(file_path, "rb") as file:
         raw_data = file.read(10000)
     result = rs_chardet.detect_rs_enc_name(raw_data)
     return result
 
 
-def scan(dir):
+def ensure_environment_set(env_name: str):
+    env_val = os.environ.get(env_name)
+    if not env_val:
+        msg.error(f"{env_name} is not set. Please set {env_name}", console, False)
+        return False
+    return True
+
+
+def ensure_program_installed(tool_name: str):
+    tool_cmd = shutil.which(tool_name)
+    if not tool_cmd:
+        msg.error(
+            f"{tool_name} is not installed. Please install {tool_name}", console, False
+        )
+        return False
+    return True
+
+
+# Modify this method slightly to add supoort for mobil apk
+# cfr can be switched to jadx later
+def decompile_jar(jar_file_path: str, output_dir: str):
+    jd_path = os.path.join(INSTALL_DIR, "tools", "cfr-0.152.jar")
+    msg.info(f"Jar File Path: {jar_file_path}")
+    msg.info(f"Java Decompiler Path: {jd_path}")
+    cfr_cmd = [
+        "java",
+        "-jar",
+        jd_path,
+        jar_file_path,
+        "--silent",
+        "true",
+        "--outputdir",
+        output_dir,
+    ]
+    msg.info("Decompiling...")
+
+    try:
+        process = subprocess.Popen(
+            cfr_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        )
+        stdout, stderr = process.communicate()
+        if stdout:
+            msg.info(f"{stdout}")
+        if stderr:
+            if "Unable to access jarfile" in stderr:
+                raise FileNotFoundError
+            else:
+                msg.warn(f"{stderr}")
+        msg.info(f"Successfully decompiled {jar_file_path} to {output_dir}")
+    except FileNotFoundError:
+        msg.error(f"{jd_path} file not found", console, False)
+        sys.exit(1)
+    except Exception:
+        msg.error("An error occurred: {e}", console, False)
+        sys.exit(1)
+
+
+def shell_safe_path(path):
+    return shlex.quote(path)
+
+
+def scan(dir: str, mode: str, output_file: str):
     cmd = []
     cmd_string = ""
     check_path(dir)
@@ -77,6 +152,8 @@ def scan(dir):
         sys.exit(1)
 
     try:
+        source_dict: dict = SourceHandler().get_sources_by_type(mode)
+        configs = source_dict["sources"]
         cmd = [
             "semgrep",
             "scan",
@@ -96,50 +173,71 @@ def scan(dir):
             cmd.extend(["--verbose"])
 
         if LOCAL_MODE:
-            cmd.extend(["--metrics=off", "--config", f"{INSTALL_DIR}/rules/", dir])
+            cmd.extend(["--metrics=off"])
         else:
-            cmd.extend(
-                ["--config", "auto", "--config", f"{INSTALL_DIR}/rules/local/", dir]
-            )
+            cmd.extend(["--config", "auto"])
+
+        for config in configs:
+            config_path = os.path.join(INSTALL_DIR, "rules", config["id"])
+            if os.path.isdir(config_path) or os.path.isfile(config_path):
+                cmd.extend(["--config", config_path])
+            else:
+                msg.warn(f"Config path {config_path} not found. Skipping...")
+
+        cmd.extend([shell_safe_path(dir)])
 
         cmd_string = " ".join(cmd)
         output = {}
+        msg.info(f"Started Semgrep at {msg.time()}")
+        with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            SpinnerColumn(),
+            transient=True,
+        ) as progress:
+            with subprocess.Popen(
+                cmd_string,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                encoding="utf-8",
+                universal_newlines=True,
+                shell=True,
+            ) as process:
+                isScanning = False
+                task1 = progress.add_task(
+                    msg.get_info("Semgrep is loading rules..."), total=None
+                )
+                task2 = progress.add_task(
+                    msg.get_info("Scanning... this may take a few minutes..."),
+                    start=False,
+                    visible=False,
+                )
+                progress.update(task1)
+                lines = []
 
-        with subprocess.Popen(
-            cmd_string,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            bufsize=1,
-            encoding="utf-8",
-            universal_newlines=True,
-            shell=True,
-        ) as process:
-            isScanning = False
-            hasPrintedMessages = False
-            msg.info("Semgrep is loading rules...")
+                while True:
+                    line = process.stdout.readline()
+                    if line == "" and process.poll() is not None:
+                        break
 
-            while True:
-                line = process.stdout.readline()
-                if line == "" and process.poll() is not None:
-                    break
-                if line.strip() != "":
-                    isScanning = True
+                    if line.strip() != "":
+                        isScanning = True
 
-                if isScanning:
-                    if not hasPrintedMessages:
-                        msg.info("Scanning... this may take a few minutes...")
+                    if isScanning:
+                        progress.update(task1, visible=False)
+                        progress.update(task2, visible=True)
+
                         if VERBOSE_LEVEL > 0:
-                            msg.info(
-                                f"------------- Semgrep output start -------------"
-                            )
-                        hasPrintedMessages = True
+                            if '{"errors' not in line:
+                                lines.append(line.strip())
 
-                    if VERBOSE_LEVEL > 0:
-                        if '{"errors' not in line:
-                            print(line.strip(), flush=True)
+                    if "scanning 0 files" in line.lower():
+                        raise BadScanException
 
-                if "scanning 0 files" in line.lower():
-                    raise BadScanException
+        raw_semgrep_output = "\n".join(lines)
+
+        if VERBOSE_LEVEL > 0:
+            console.print(Panel.fit(raw_semgrep_output, title="Semgrep output"))
 
         process.wait()
         if os.path.isfile(f"semgrep-scan-{TIMESTR}"):
@@ -147,7 +245,7 @@ def scan(dir):
                 try:
                     output = json.loads(str(output.read()))
                     os.remove(f"semgrep-scan-{TIMESTR}")
-                except Exception as e:
+                except Exception:
                     msg.error("", console)
                     sys.exit(1)
         else:
@@ -155,50 +253,64 @@ def scan(dir):
         save_raw_semgrep_output(output)
 
         if VERBOSE_LEVEL > 0:
-            msg.info("-------------- Semgrep output end --------------")
-            msg.info(f"Semgrep command used: {cmd_string}")
+            console.print("\n")
+            # msg.info("-------------- Semgrep output end --------------")
+            msg.info(f"Semgrep command used: ")
+            console.print(
+                Syntax(cmd_string, "bash", word_wrap=True, padding=(0, 0, 0, 12))
+            )
+            console.print("\n")
             msg.info(
                 f"The raw Semgrep JSON output was saved to {os.getcwd()+'/semgrep_output.json'}"
             )
-        msg.info("Scanning complete")
+        msg.info(f"Semgrep scan complete at {msg.time()}")
 
         return output
 
     except BadScanException as bse:
-        print()
-        if VERBOSE_LEVEL > 0:
-            msg.info("-------------- Semgrep output end --------------")
+        console.print()
+        # if VERBOSE_LEVEL > 0:
+        #     msg.info("-------------- Semgrep output end --------------")
         msg.error(
-            "Semgrep failed to scan successfully. Check if the specified directory is listed in a .gitignore file for the project being scanned. The specified directory or the results may also be empty.",
+            "Semgrep scan failed. Check if the specified directory is listed in a .gitignore file for the project being scanned. The specified directory or the results may also be empty.",
             console,
             False,
         )
         msg.error(str(bse), console, False)
-        msg.info(f"Semgrep command: {cmd_string}")
+        msg.info(f"Semgrep command: ")
+        console.print(Syntax(cmd_string, "bash", word_wrap=True, padding=(0, 0, 0, 12)))
         try:
             os.remove(f"semgrep-scan-{TIMESTR}")
         except:
             pass
         sys.exit(1)
     except subprocess.CalledProcessError as e:
-        print()
-        if VERBOSE_LEVEL > 0:
-            msg.info("-------------- Semgrep output end --------------")
+        console.print()
+        # if VERBOSE_LEVEL > 0:
+        #     msg.info("-------------- Semgrep output end --------------")
 
         msg.error(f"Semgrep returned with errors: {e.stdout}", console, False)
-        msg.info(f"Semgrep command: {cmd_string}")
+        msg.info(f"Semgrep command: ")
+        console.print(Syntax(cmd_string, "bash", word_wrap=True, padding=(0, 0, 0, 12)))
         try:
             os.remove(f"semgrep-scan-{TIMESTR}")
         except:
             pass
         sys.exit(1)
 
-    except Exception as e:
-        print()
+    except FileNotFoundError:
+        msg.error(f"The specified directory could not be found: {dir}", console, False)
+        sys.exit(1)
+
+    except Exception:
+        console.print()
         if VERBOSE_LEVEL > 0:
-            msg.info("-------------- Semgrep output end --------------")
-            msg.info(f"Semgrep command: {cmd_string}")
-        msg.error(f"An error occurred", console)
+            # msg.info("-------------- Semgrep output end --------------")
+            msg.info(f"Semgrep command: ")
+            console.print(
+                Syntax(cmd_string, "bash", word_wrap=True, padding=(0, 0, 0, 12))
+            )
+        msg.error("An error occurred", console)
         try:
             os.remove(f"semgrep-scan-{TIMESTR}")
         except:
@@ -260,7 +372,7 @@ def process_json(results, dir, packages) -> dict:
 
                 home_len = len((INSTALL_DIR).split("/"))
                 rule_id = result["check_id"].split(".")
-                rule_id = rule_id[home_len+1:]
+                rule_id = rule_id[home_len + 1 :]
                 rule_id = ".".join(rule_id)
 
                 rule_index = get_rule_index(json_results["results"], rule_id)
@@ -310,13 +422,11 @@ def process_json(results, dir, packages) -> dict:
                     )
 
         return json_results
-    except KeyError as k:
-        msg.error(
-            f"The following key could not be found while parsing JSON: ", console, True
-        )
+    except KeyError:
+        msg.error("The following key could not be found while parsing JSON", console)
         sys.exit(1)
-    except Exception as e:
-        msg.error(f"Error parsing JSON: ", console, True)
+    except Exception:
+        msg.error("Error parsing JSON", console)
         sys.exit(1)
 
 
@@ -328,12 +438,9 @@ def get_rule_index(results: list, rule_id):
 
 
 def count_findings(results):
-
     count = 0
-
     for rule in results["results"]:
         count += len(rule["findings"])
-
     return count
 
 
@@ -347,34 +454,29 @@ def save_results(scan_results: dict, output_file, dir="", packages=[]):
         if len(processed_results) > 0:
             try:
                 goto_output_dir()
-
                 base = open(f"{INSTALL_DIR}/web/templates/template.html", "r").read()
-
-                output_file_old = output_file
-                counter = 0
-                while os.path.isfile(f"{output_file}.html") and counter < 100:
-                    output_file = output_file_old + f"_{counter}"
 
                 with open(f"{output_file}.html", "a") as html_file:
                     html_file.write(base)
                 os.mkdir("static")
-                shutil.copytree(f"{INSTALL_DIR}/web/static/js", f"static/js")
-                shutil.copytree(f"{INSTALL_DIR}/web/static/css", f"static/css")
-                shutil.copytree(f"{INSTALL_DIR}/web/static/img", f"static/img")
+                shutil.copytree(f"{INSTALL_DIR}/web/static/js", "static/js")
+                shutil.copytree(f"{INSTALL_DIR}/web/static/css", "static/css")
+                shutil.copytree(f"{INSTALL_DIR}/web/static/img", "static/img")
 
                 if not os.path.isdir("results"):
                     os.mkdir("results")
 
-                with open(f"results/results.js", "a") as js_file:
+                with open("results/results.js", "a") as js_file:
                     js_file.write(
                         f"const sitgrep_results = {json.dumps(processed_results)}"
                     )
-
                 output_file_location = os.path.abspath("{}.html".format(output_file))
                 msg.info(
                     f'Scan results: {count_findings(processed_results)} findings after scanning {len(scan_results["paths"]["scanned"])} files'
                 )
-                msg.success(f"Results have been saved to {output_file_location}")
+                msg.success(
+                    f'Results have been saved to {output_file_location.replace(os.path.expanduser("~"), "~")}'
+                )
 
                 if not NO_OPEN:
 
@@ -386,30 +488,50 @@ def save_results(scan_results: dict, output_file, dir="", packages=[]):
             except FileExistsError as e:
                 msg.error(f"The file already exists: {e}", console, False)
                 sys.exit(-1)
-            except Exception as e:
-                msg.error(f"There was an error saving the file: ", console, True)
+            except Exception:
+                msg.error("There was an error saving the file: ", console, True)
                 sys.exit(-1)
         else:
             msg.success("Congrats, there were no findings.")
-    except Exception as e:
-        msg.error(f"There was an error saving the output: ", console, True)
+    except Exception:
+        msg.error("There was an error saving the output: ", console, True)
+        # traceback.print_exc()
         sys.exit(-1)
 
 
 def goto_output_dir():
+    os.chdir(OUTPUT_FOLDER)
+
+
+def handle_clone_failure(error: str):
+    msg.error("A package clone failed", console, False)
+    option = input("\tDo you wish to continue? (y/n): ")
+
+    if option.lower().strip().startswith("n"):
+        msg.info("Cancelling scan...")
+        msg.error(error, console, False)
+        sys.exit(1)
+
+
+def create_output_dir():
     os.chdir(START_DIR)
+
     if not os.path.isdir("sitgrep-report"):
         os.mkdir("sitgrep-report")
-    os.chdir("sitgrep-report")
 
-    if not os.path.isdir(f"sitgrep-{TIMESTR}"):
-        os.mkdir(f"sitgrep-{TIMESTR}")
-    os.chdir(f"sitgrep-{TIMESTR}")
+    if not os.path.isdir(OUTPUT_FOLDER):
+        os.mkdir(OUTPUT_FOLDER)
+    else:
+        msg.error(
+            "Output directory already exists. Cannot overwrite previous reports",
+            console,
+            False,
+        )
 
 
-def save_raw_semgrep_output(results):
+def save_raw_semgrep_output(results: object):
     goto_output_dir()
-    with open("semgrep-output.json", "w") as output:
+    with open("semgrep_output.json", "w") as output:
         json.dump(results, output, indent=4)
 
 
@@ -527,7 +649,50 @@ def parse_gitlab_url(url):
             return None
 
 
-def clone_and_make_config(failed_packages, package_details, progress_bar):
+def get_url_for_site(
+    project_name: str, package_details: dict, with_ssh: bool, site: str
+) -> str:
+    match site:
+        case "github":
+            if with_ssh:
+                return f'git@github.com:{package_details["path"]}/{project_name}.git'
+            else:
+                return (
+                    f'https://github.com/{package_details["path"]}/{project_name}.git'
+                )
+        case "gitlab":
+            if with_ssh:
+                return f'git@gitlab.com:{package_details["path"]}/{project_name}.git'
+            else:
+                return (
+                    f'https://gitlab.com/{package_details["path"]}/{project_name}.git'
+                )
+        case _:
+            msg.error(
+                "Only Github and Gitlab are currently supported.",
+                console=console,
+                showException=True,
+            )
+            sys.exit(1)
+
+
+def get_env(with_ssh: bool, ssh_key_path: str) -> dict:
+    env = os.environ.copy()
+    if with_ssh and ssh_key_path != "":
+        if ssh_key_path != "":
+            env["GIT_SSH_COMMAND"] = f"ssh -i {ssh_key_path} -o IdentitiesOnly=yes"
+        else:
+            env.pop("GIT_SSH_COMMAND", None)
+    return env
+
+
+def clone_repo(
+    failed_packages: list,
+    package_details: dict,
+    progress_bar: ProgressBar,
+    protocol: str,
+    key: str,
+):
     project_name = package_details["project"]
     branch = (
         package_details["branch"].strip()
@@ -535,61 +700,132 @@ def clone_and_make_config(failed_packages, package_details, progress_bar):
         else None
     )
 
+    with_ssh = True if protocol == "SSH" else False
+    repo_url: str = get_url_for_site(
+        project_name=project_name,
+        package_details=package_details,
+        with_ssh=with_ssh,
+        site=package_details["site"],
+    )
+
+    def check_git_access(project_name, package_details, key=""):
+        project_name.replace(".git", "")
+
+        env = get_env(with_ssh, ssh_key_path)
+        env["GIT_TERMINAL_PROMPT"] = "0"
+
+        # Attempt to list remote references without providing credentials
+        process = subprocess.Popen(
+            ["git", "ls-remote", repo_url],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            bufsize=1,
+            encoding="utf-8",
+            env=env,
+        )
+
+        no_auth_needed = True
+
+        for line in process.stdout:
+            if (
+                "username" in line.lower()
+                or "fatal" in line.lower()
+                or "passphrase" in line.lower()
+                or "permission denied" in line.lower()
+            ):
+                no_auth_needed = False
+                process.kill()
+            else:
+                no_auth_needed = True
+
+        # Wait for process to finish
+        process.wait()
+
+        if no_auth_needed:
+            return False
+        elif not with_ssh:
+            username = Prompt.ask(f"Username for {package_details["site"]}")
+            password = Prompt.ask(
+                f"Passphrase for {package_details["site"]}", password=True
+            )
+            os.environ["GIT_USERNAME"] = username
+            os.environ["GIT_PASSWORD"] = password
+        elif with_ssh and key.strip() != "":
+            try:
+                subprocess.run(
+                    ["ssh-add", key], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                )
+                msg.info(f"Adding SSH key {key} to SSH agent...")
+                return True
+            except subprocess.CalledProcessError as e:
+                msg.error(f"Error adding SSH key: {e.stderr.decode()}", console, False)
+        return False
+
     def handle_failed_package(failed_packages, project_name, error):
         failed_packages.append({"package": f"{project_name}", "error": error})
 
     try:
-        if package_details["site"] == "github":
-            if branch == "main":
-                branch = ""
+        check_path(os.path.expanduser(key.strip()))
+    except FileNotFoundError:
+        msg.error(f"The specified key could not be found: {key}", console, False)
+        sys.exit(1)
 
-            progress_bar.start()
-            Repo.clone_from(
-                url=f'https://github.com/{package_details["path"]}/{project_name}.git',
-                to_path=f"{os.getcwd()}/{project_name}",
-                multi_options=["--single-branch"],
-                branch=branch,
-                progress=progress_bar,
-                depth=1,
-                jobs=4,
-            )
-        elif package_details["site"] == "gitlab":
-            if branch == "main":
-                branch = ""
+    ssh_key_path = os.path.expanduser(key.strip()).strip()
+    env = get_env(with_ssh, ssh_key_path)
+    added_ssh_key = False
 
-            progress_bar.start()
-            Repo.clone_from(
-                url=f'https://gitlab.com/{package_details["path"]}/{project_name}.git',
-                to_path=f"{os.getcwd()}/{project_name}",
-                multi_options=["--single-branch"],
-                branch=branch,
-                progress=progress_bar,
-                depth=1,
-                jobs=4,
-            )
+    try:
+        if package_details["site"].lower() in ["github", "gitlab"]:
+            if branch == "main":
+                branch = None
+
+        added_ssh_key = check_git_access(
+            project_name, package_details, key=ssh_key_path
+        )
+
+        progress_bar.start()
+        Repo.clone_from(
+            url=repo_url,
+            to_path=f"{os.getcwd()}/{project_name}",
+            multi_options=["--single-branch"],
+            branch=branch,
+            progress=progress_bar,
+            depth=1,
+            jobs=4,
+            env=env,
+        )
 
         os.chdir(project_name)
         with open("sitgrep-config.json", "w") as config_file:
             json.dump(package_details, config_file)
-
+        progress_bar.stop()
         os.chdir("../")
+        env.pop("GIT_SSH_COMMAND", None)
+        if added_ssh_key and protocol == "SSH":
+            choice = Prompt.ask(
+                msg.get_warn(
+                    "Would you like to keep the SSH key in the SSH agent to avoid entering the password to this key in the future? (y/n)"
+                )
+            )
+            if choice.lower().startswith("n"):
+                subprocess.run(["ssh-add", "-d", key], check=True)
+                msg.info(f"Removing SSH key {key} from SSH agent...")
 
     except GitCommandError as e:
+        console.print()
+        error_msg = f"The repository wasn't found, you do not have access, or another error occurred. If using an SSH key with a password, please provide the path to the SSH key using the --ssh-key parameter. \n{e}"
         progress_bar.stop()
-        handle_failed_package(
-            failed_packages,
-            project_name,
-            f"The repository wasn't found, you do not have access, or another error occurred. {e}",
-        )
+        handle_failed_package(failed_packages, project_name, error_msg)
+    except subprocess.SubprocessError:
+        pass
     except Exception as e:
+        console.print()
+        error_msg = f"Error while downloading package - {e}"
         progress_bar.stop()
-        handle_failed_package(
-            failed_packages, project_name, f"Error while downloading package - {e}"
-        )
+        handle_failed_package(failed_packages, project_name, error_msg)
 
 
-def download_packages(packages: list):
-    print()
+def download_packages(packages: list, protocol: str, key: str = ""):
 
     failed_packages = []
 
@@ -599,14 +835,15 @@ def download_packages(packages: list):
     os.mkdir("Sitgrep_Packages")
     os.chdir("Sitgrep_Packages")
 
+    msg.info(f"Downloading {len(packages)} package(s)...")
+
     for package in packages:
 
-        progress_bar = ProgressBar(target=package["project"], hide=False)
-        clone_and_make_config(failed_packages, package, progress_bar)
-        progress_bar.stop()
+        progress_bar = ProgressBar(target=package["project"])
+        clone_repo(failed_packages, package, progress_bar, protocol, key)
 
     if len(failed_packages) == len(packages):
-        print()
+        console.print()
         msg.error("All packages failed to download.", console, False)
 
         for failed_package in failed_packages:
@@ -620,9 +857,9 @@ def download_packages(packages: list):
 
     else:
         if len(failed_packages) > 0:
-            print()
+            console.print()
             msg.error(
-                f"The following packages failed to be downloaded:\n", console, False
+                "The following packages failed to be downloaded:\n", console, False
             )
             for failed_package in failed_packages:
                 msg.error(
@@ -630,10 +867,10 @@ def download_packages(packages: list):
                     console,
                     False,
                 )
-            print()
+            console.print()
         else:
-            msg.success(
-                f"Successfully downloaded {len(packages)-len(failed_packages)} package(s)\n"
+            msg.info(
+                f"Successfully downloaded {len(packages)-len(failed_packages)} package(s)"
             )
 
 
@@ -651,7 +888,7 @@ def split_packages(packages: list, mode: str):
                 parsed_github_url = parse_github_url(package)
 
                 if not parsed_github_url or parsed_github_url is None:
-                    msg.error(f"Unable to parse Github URL: {package}", console, False)
+                    msg.error(f"Unable to parse Github URL: {package}", console, True)
 
                 split_packages.append(
                     {
@@ -668,7 +905,7 @@ def split_packages(packages: list, mode: str):
                 parsed_gitlab_url = parse_gitlab_url(package)
 
                 if not parsed_gitlab_url or parsed_gitlab_url is None:
-                    msg.error(f"Unable to parse Github URL: {package}", console, False)
+                    msg.error(f"Unable to parse Github URL: {package}", console, True)
 
                 split_packages.append(
                     {
@@ -681,13 +918,13 @@ def split_packages(packages: list, mode: str):
                 )
             else:
                 msg.error(
-                    f"Could not parse URL. Only Github and Gitlab links are currently supported.",
+                    "Could not parse URL. Only Github and Gitlab links are currently supported.",
                     console,
                     False,
                 )
-                msg.info(f"Please report this so this usecase can be added.")
+                msg.info("Please report this so this usecase can be added.")
         else:
-            msg.error(f"Unable to parse package: {package}", console, False)
+            msg.error(f"Unable to parse package: {package}", console)
 
     return split_packages
 
@@ -706,8 +943,8 @@ def get_package_list(packages):
             else:
                 packages = ",".join(packages)
                 package_list = packages.split(",")
-        except Exception as e:
-            msg.error(f"There was an error parsing the package list: ", console, False)
+        except Exception:
+            msg.error("There was an error parsing the package list: ", console, True)
             sys.exit(1)
 
     else:
@@ -851,6 +1088,8 @@ def print_banner(directory, output_file):
     )
 
     banner = "-" * banner_len + "\n" + banner + "\n" + "-" * banner_len
+    start_rgb = (255, 0, 0)  # Red
+    end_rgb = (75, 0, 130)  # Indigo/Violet (can adjust this to any color you want)
 
     # Generate the RGB gradient across the banner length
     gradient = generate_rainbow_gradient(banner_len)
@@ -873,14 +1112,35 @@ def print_banner(directory, output_file):
 
 def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
 
+    has_key = False
+    if hasattr(args, "ssh_key") and args.ssh_key:
+        try:
+            check_path(os.path.expanduser(args.ssh_key))
+            has_key = True
+        except FileNotFoundError:
+            msg.error(
+                f"The specified SSH key could not be found: {args.ssh_key}",
+                console,
+                False,
+            )
+            sys.exit(1)
+
     if LOCAL_MODE and len(packages) > 0 and ALLOW_DOWNLOAD:
-        download_packages(packages)
+        (
+            download_packages(packages, args.protocol, args.ssh_key)
+            if has_key
+            else download_packages(packages, args.protocol)
+        )
         if args.no_scan:
             sys.exit(1)
     elif len(packages) > 0 and ALLOW_DOWNLOAD:
-        download_packages(packages)
+        (
+            download_packages(packages, args.protocol, args.ssh_key)
+            if has_key
+            else download_packages(packages, args.protocol)
+        )
 
-    scan_results = scan(directory)
+    scan_results = scan(directory, args.mode, output_file)
 
     try:
         if "results" in scan_results and len(scan_results["results"]) > 0:
@@ -891,11 +1151,7 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
                 and hasattr(args, "vscode")
             ):
                 open_dir_in_vscode(dir=directory)
-        elif (
-            "results" in scan_results
-            and "errors" in scan_results
-            and len(scan_results["errors"]) > 0
-        ):
+        elif "errors" in scan_results and len(scan_results["errors"]) > 0:
             valid_errors = []
             for error in scan_results["errors"]:
                 if (
@@ -912,6 +1168,8 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
                 msg.error(valid_errors, console, False)
             else:
                 msg.success("Congrats, there were no findings.")
+        elif len(scan_results["results"]) == 0:
+            msg.success("Congrats, there were no findings.")
         elif (
             "results" not in scan_results
             and "errors" not in scan_results
@@ -922,13 +1180,13 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
                 console,
                 False,
             )
-
-    except Exception as e:
-        msg.error(f"There was an error: ", console, True)
+    except Exception:
+        msg.error("There was an error: ", console)
 
 
 def main(args):
     directory = os.path.abspath(args.directory)
+    directory = extract_if_archive(directory)
     global CONTEXT_LINE_COUNT
     CONTEXT_LINE_COUNT = args.context
 
@@ -942,12 +1200,20 @@ def main(args):
     NO_OPEN = args.no_auto_open
 
     ALLOW_DOWNLOAD = False
+    global OUTPUT_FOLDER
 
     packages = []
-    if args.output == "" or args.output == None:
+    output_file = args.output
+    if str(args.output).strip() == "" or args.output == None:
         output_file = f"sitgrep-{TIMESTR}"
+        OUTPUT_FOLDER = os.path.join(START_DIR, "sitgrep-report", f"sitgrep-{TIMESTR}")
     else:
-        output_file = f"sitgrep-{args.output}"
+        output_file = args.output
+        OUTPUT_FOLDER = os.path.join(
+            START_DIR, "sitgrep-report", f"{args.output}-{TIMESTR}"
+        )
+
+    create_output_dir()
 
     if hasattr(args, "json_input") and args.json_input:
         if args.subcommands == "local":
@@ -971,15 +1237,51 @@ def main(args):
                     console,
                     False,
                 )
-        except Exception as e:
-            msg.error(f"There was an error loading the JSON file: ", console, True)
+        except Exception:
+            msg.error("There was an error loading the JSON file: ", console)
             sys.exit(1)
     elif args.subcommands == "local":
         LOCAL_MODE = True
+
+    # Check for the --jar_file argument and decompile the JAR
+    if args.jar_file:
+        jar_file_path = START_DIR
+        if os.path.isabs(args.jar_file):
+            jar_file_path = args.jar_file
+        else:
+            jar_file_path = os.path.join(START_DIR, args.jar_file)
+        if not os.path.isfile(jar_file_path):
+            msg.error(f"The JAR file {jar_file_path} does not exist.", console)
+            sys.exit(1)
+
+        if not ensure_program_installed("java"):
+            sys.exit(1)
+
+        if not ensure_environment_set("JAVA_HOME"):
+            sys.exit(1)
+
+        decompiled_dir = os.path.join(directory, "sitgrep_jar_decompiled")
+        if not os.path.exists(decompiled_dir):
+            os.makedirs(decompiled_dir)
+
+        jar_name = os.path.basename(jar_file_path)
+        decompiled_src_dir = os.path.join(decompiled_dir, f"{jar_name}_src")
+        if not os.path.exists(decompiled_src_dir):
+            os.makedirs(decompiled_src_dir)
+
+        decompile_jar(jar_file_path, decompiled_src_dir)
+        directory = decompiled_src_dir
+
     try:
-        if not hasattr(args, "github") and not hasattr(args, "github"):
+        if (
+            not hasattr(args, "github")
+            and not hasattr(args, "gitlab")
+        ):
             packages = get_packages_from_dir(directory)
-        elif hasattr(args, "github") or hasattr(args, "gitlab"):
+        elif (
+            hasattr(args, "github")
+            or hasattr(args, "gitlab")
+        ):
             ALLOW_DOWNLOAD = True
 
             github_packages: list = []
@@ -995,7 +1297,7 @@ def main(args):
                 github_packages = split_packages(github_packages, mode="github")
                 directory = (
                     os.path.join(directory, "Sitgrep_Packages")
-                    if not ("Sitgrep_Packages" in directory)
+                    if "Sitgrep_Packages" not in directory
                     else directory
                 )
             if (
@@ -1008,7 +1310,7 @@ def main(args):
                 gitlab_packages = split_packages(gitlab_packages, mode="gitlab")
                 directory = (
                     os.path.join(directory, "Sitgrep_Packages")
-                    if not ("Sitgrep_Packages" in directory)
+                    if "Sitgrep_Packages" not in directory
                     else directory
                 )
 
@@ -1020,9 +1322,7 @@ def main(args):
                 raise (FileNotFoundError)
     except FileNotFoundError:
         msg.error(
-            f"The file or directory specified could not be found: {directory}",
-            console,
-            False,
+            f"The directory specified could not be found: {directory}", console, False
         )
         sys.exit(1)
     except Exception as e:
@@ -1030,19 +1330,9 @@ def main(args):
             msg.error(f"There was an error gathering package data: ", console, True)
         else:
             msg.error(
-                f"There was an error parsing the directory of the package: ",
+                "There was an error parsing the directory of the package: ",
                 console,
-                True,
             )
-        sys.exit(1)
-
-    except FileNotFoundError:
-        msg.error("The directory specified could not be found", console, False)
-        sys.exit(1)
-    except Exception as e:
-        msg.error(
-            f"There was an error parsing the directory of the package: ", console, True
-        )
         sys.exit(1)
 
     print_banner(directory=directory, output_file=output_file)
@@ -1050,40 +1340,46 @@ def main(args):
 
 
 def cli():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=RichHelpFormatter)
 
     subparsers = parser.add_subparsers(dest="subcommands")
-
-    local_parser = subparsers.add_parser(
-        "local",
-        help="Use local rules instead of official Semgrep rules. Run 'sitgrep local -h' for more info.",
-    )
-
     source_handler = SourceHandler()
     sources_parser = subparsers.add_parser(
         "sources",
         help="Manage sources",
     )
-    sources_subparsers = sources_parser.add_subparsers(dest='action', required=True)
+    sources_subparsers = sources_parser.add_subparsers(dest="action", required=True)
 
-    update_parser = sources_subparsers.add_parser('add', help='Add a source')
-    update_parser.add_argument('--name', required=True, help='Name of the source')
-    update_parser.add_argument('--url', required=True, help='URL of the source')
+    update_parser = sources_subparsers.add_parser("add", help="Add a rule source")
+    update_parser.add_argument("--id", required=True, help="Name/ID of the source")
+    update_parser.add_argument("--url", required=True, help="URL of the source")
+    update_parser.add_argument(
+        "--categories",
+        type=validate_choices,
+        required=True,
+        help=f"Categories of the source. Valid categories: {MODES}",
+    )
     update_parser.set_defaults(func=source_handler.add_source)
 
-    delete_parser = sources_subparsers.add_parser('delete', help='Delete a source')
-    delete_parser.add_argument('--name', required=True, help='Name of the source')
+    delete_parser = sources_subparsers.add_parser("delete", help="Delete a rule source")
+    delete_parser.add_argument("--id", required=True, help="Name/ID of the source")
     delete_parser.set_defaults(func=source_handler.delete_source)
 
-    list_parser = sources_subparsers.add_parser('list', help='List all sources')
+    list_parser = sources_subparsers.add_parser("list", help="List all rule sources")
     list_parser.set_defaults(func=source_handler.list_sources)
 
-    restore_parser = sources_subparsers.add_parser('restore', help='Restore original sources')
+    restore_parser = sources_subparsers.add_parser(
+        "restore", help="Restore original sources"
+    )
     restore_parser.set_defaults(func=source_handler.restore_sources)
 
-    fetch_parser = sources_subparsers.add_parser('fetch', help='Fetch all sources')
+    fetch_parser = sources_subparsers.add_parser("fetch", help="Fetch all rule sources")
     fetch_parser.set_defaults(func=source_handler.fetch_sources)
 
+    local_parser = subparsers.add_parser(
+        "local",
+        help="Use local rules instead of official Semgrep rules. Run 'sitgrep local -h' for more info.",
+    )
     local_parser.add_argument(
         "-d",
         "--directory",
@@ -1146,17 +1442,80 @@ def cli():
         nargs="+",
         help="Specify Gitlab packages in a text file to download. Accepts Gitlab links.",
     )
+    local_parser.add_argument(
+        "-jf",
+        "--jar_file",
+        required=False,
+        type=str,
+        help="Specify full path to JAR.",
+    )
+    local_parser.add_argument(
+        "-m",
+        "--mode",
+        required=False,
+        choices=MODES,
+        default="GENERAL",
+        type=str,
+        help=f"Specify mode. Valid modes: {MODES}",
+    )
+    local_parser.add_argument(
+        "-p",
+        "--protocol",
+        required=False,
+        choices=PROTOCOLS,
+        default="SSH",
+        type=str.upper,
+        help=f"Specify mode. Valid protocols: {PROTOCOLS}",
+    )
+    local_parser.add_argument(
+        "-i",
+        "--ssh-key",
+        required=False,
+        type=str,
+        help=f"Specify SSH key to use.",
+    )
 
     local_parser.add_argument(
         "-vs", "--vscode", action="store_true", help="Open the folder in VSCode"
     )
-
+    parser.add_argument(
+        "-m",
+        "--mode",
+        required=False,
+        choices=MODES,
+        default="GENERAL",
+        type=str,
+        help=f"Specify mode. Valid modes: {MODES}",
+    )
+    parser.add_argument(
+        "-p",
+        "--protocol",
+        required=False,
+        choices=PROTOCOLS,
+        default="SSH",
+        type=str.upper,
+        help=f"Specify mode. Valid protocols: {PROTOCOLS}",
+    )
+    parser.add_argument(
+        "-i",
+        "--ssh-key",
+        required=False,
+        type=str,
+        help=f"Specify SSH key to use.",
+    )
     parser.add_argument(
         "-c",
         "--context",
         default=5,
         type=int,
         help="The amount of context lines above and below to save (default=5)",
+    )
+    parser.add_argument(
+        "-jf",
+        "--jar_file",
+        required=False,
+        type=str,
+        help="Specify full path to JAR.",
     )
     parser.add_argument(
         "-d",
@@ -1224,7 +1583,7 @@ def cli():
     try:
         main(args)
     except KeyboardInterrupt:
-        print("", end="\r")
+        console.print("\r\n", end="\r")
         msg.warn("Detected keyboard interrupt. Exiting...")
     except MemoryError:
         msg.error(
@@ -1232,5 +1591,14 @@ def cli():
             console,
             False,
         )
-    except Exception as e:
-        msg.error(f"An unknown exception occured: ", console, True)
+        sys.exit(2)
+    except FileNotFoundError:
+        msg.error(
+            f"The directory specified could not be found: {args.directory}",
+            console,
+            True,
+        )
+        sys.exit(3)
+    except Exception:
+        console.print()
+        msg.error("An unknown exception occured", console, True)

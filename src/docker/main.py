@@ -7,16 +7,18 @@ import subprocess
 import pty
 from io import BytesIO
 import shutil
+import urllib.parse
 import re
 
 # ANSI color codes mapping to CSS styles
 ANSI_TO_HTML = {
-    '\033[91m': '<span style="color: red;">',       # RED
-    '\033[92m': '<span style="color: green;">',     # GREEN
-    '\033[93m': '<span style="color: yellow;">',    # YELLOW
-    '\033[96m': '<span style="color: cyan;">',      # CYAN
+    '\033[31m': '<span style="color: red;">',       # RED
+    '\033[32m': '<span style="color: green;">',     # GREEN
+    '\033[33m': '<span style="color: yellow;">',    # YELLOW
+    '\033[36m': '<span style="color: cyan;">',      # CYAN
     '\033[38;5;208m': '<span style="color: orange;">',  # ORANGE (custom color)
-    '\033[0m': '</span>'  # RESET (close the span)
+    '\033[0m': '</span>',  # RESET (close the span)
+    '\033[1m': '<span style="font-weight: bold;">',  # BOLD
 }
 
 app = Flask(__name__)
@@ -31,7 +33,7 @@ os.makedirs(DIRECTORY_PATH, exist_ok=True)  # Create the extracted directory if 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 
-ansi_escape_pattern = re.compile(r'(\033\[91m|\033\[92m|\033\[93m|\033\[96m|\033\[38;5;208m|\033\[0m)')
+ansi_escape_pattern = re.compile(r'\x1b\[[0-9;?]*[a-zA-Z]')
 
 # Function to replace ANSI codes with corresponding HTML
 def ansi_to_html(text):
@@ -43,7 +45,15 @@ def ansi_to_html(text):
     # Replace ANSI codes in the text
     text_with_html = ansi_escape_pattern.sub(replace_ansi, text)
     
-    return text_with_html
+    return text_with_html.replace('\033[?25l', '').replace('\033[?25h', '')
+
+
+def get_clean_path(url_path):
+    decoded = urllib.parse.unquote(url_path)
+    ansi_escape = re.compile(r'\x1B\[[0-9;?]*[ -/]*[@-~]')
+    clean = ansi_escape.sub('', decoded)
+    
+    return urllib.parse.quote(clean)
 
 
 @app.route('/')
@@ -77,16 +87,25 @@ def scan():
                 buffer += output
                 while '\n' in buffer:
                     line, buffer = buffer.split('\n', 1)
-                    if "Results have been saved to" in line:
+                    if "sitgrep-report" in line:
                         results_path = line.split(' ')[-1].strip()
+                        logging.info("Result path found...")
+                        logging.info(line)
+                    elif "ERROR" in line:
+                        logging.error("Error has occurred during scan")
+                        exit(1)
                     yield f"data: {ansi_to_html(line)}\n\n"  # Send each line as an SSE message
             # Send the final part of the buffer if it contains any data
             if buffer:
                 yield f"data: {ansi_to_html(buffer)}\n\n"
         finally:
             os.close(master_fd)  # Ensure the master file descriptor is closed
-
-        report_folder = '/'.join(results_path.split('/')[:4])
+        if results_path == "":
+            logging.error("results path returned empty")
+            exit(1)
+        results_path = get_clean_path(results_path)
+        report_folder = '/'.join(results_path.split('/')[0:-1])
+        logging.info(report_folder)
         zip_io = BytesIO()
         logging.info("Compressing results into zip file...")
         with zipfile.ZipFile(zip_io, 'w', zipfile.ZIP_DEFLATED) as zip_file:
@@ -94,8 +113,8 @@ def scan():
             for root, dirs, files in os.walk(report_folder):
                 for file in files:
                     file_path = os.path.join(root, file)
-                    # Add file to zip, keeping the directory structure
                     zip_file.write(file_path, os.path.relpath(file_path, report_folder))
+                    logging.info(os.path.relpath(file_path, report_folder))
 
 
         zip_io.seek(0)
@@ -114,10 +133,10 @@ def get_host_directory():
 def download_zip():
     # Get the extracted filename from the query parameters
     report_folder = request.args.get('folder')
-    filename = report_folder.split('/')[3]
     zip_io = BytesIO()
-    
+    print(report_folder)
     if report_folder is not None:
+        filename = report_folder.split('/')[-1]
         with zipfile.ZipFile(zip_io, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             for root, dirs, files in os.walk(report_folder):
                 for file in files:

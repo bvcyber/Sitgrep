@@ -28,11 +28,6 @@ function seperateFindings(results) {
             }
         }
         else {
-            // console.log('realGroupIndex: ', realGroupIndex)
-            // console.log("realFindingIndex: ", realFindingIndex)
-            // console.log(results[realGroupIndex].findings)
-            // console.log('dFinding: ', dFinding)
-            // console.log('------------------------------')
         }
     }
 
@@ -40,8 +35,7 @@ function seperateFindings(results) {
 }
 
 function GetPackages() {
-    var packages = sitgrep_results["packages"].map(package => package.project.trim());
-    return packages
+    return sitgrep_results["packages"].map(package => package.project.trim());
 }
 
 function GetOWASPsList() {

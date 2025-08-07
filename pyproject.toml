@@ -1,6 +1,6 @@
 [project]
 name = "sitgrep"
-version = "3.7.0"
+version = "3.7.3"
 description = "Enhance your code review with Sitgrep"
 authors = [
     { name = "John Ascher", email = "jascher@securityinnovation.com" }
@@ -16,8 +16,12 @@ dependencies = [
     "PyYAML",
     "rich",
     "numpy",
-    "rs-chardet"
-]
+    "rs-chardet",
+    "validators",
+    "py7zr",
+    "rarfile",
+    "rich-argparse"
+  ]
 requires-python = ">=3.7.16"
 
 [build-system]

@@ -18,7 +18,7 @@ Sitgrep offers an intuitive solution for scanning GitHub and GitLab repositories
    ```
     python3 install.py
     ```
-4. Run the rule fetcher to download rules locally:
+4. Run the rule fetcher:
     ```
     sitgrep sources fetch
     ```
@@ -61,23 +61,29 @@ Example: sitgrep -c 2 -d ~/my/dir/ -o output_file
 positional arguments:
   local                           Enable local mode
     -N, --no-scan                 Only download the packages, do not scan them. (default=False)
-    -gh, --github       Provide a list of Github repositories to download and scan. Overrides the directory parameter (-d)
-    -gh, --github       Provide a list of Gitlab repositories to download and scan. Overrides the directory parameter (-d)
-    -vs, --vscode       Open the folder being scanned in VSCode after scan finishes. Only usable when not using --github/--gitlab
 
+  sources             Manage sources
+    add                 Add a source
+    delete              Delete a source
+    list                List all sources
+    restore             Restore original sources
+    fetch               Fetch all sources
 
 optional arguments:
   -h, --help          Show this help message and exit
   -c, --context       The amount of context lines above and below to save (default=5)
   -d, --directory     The directory to scan (default=CWD)
-  -o, --output        The output file name (default=SitgrepResults.html)
+  -o, --output        The output file name
   -V, --version       Print Sitgrep's version   
   -v, --verbose       Increase verbosity level (default 0, max of 3)
   -j, --json-input    Load a Semgrep JSON output file
   -n, --no-auto-open Disable auto-opening the results in the browser
   -gh, --github       Provide a list of Github repositories to download and scan. Overrides the directory parameter (-d)
-  -gh, --github       Provide a list of Gitlab repositories to download and scan. Overrides the directory parameter (-d)
+  -gl, --gitlab       Provide a list of Gitlab repositories to download and scan. Overrides the directory parameter (-d)
+  -jf, --jar_file     Provide the path to a JAR file. The file will be decompiled and resulting source code scanned. Relative and absolute paths are supported.
   -vs, --vscode       Open the folder being scanned in VSCode after scan finishes. Only usable when not using --github or --gitlab
+  -i, --ssh-key       Specify an SSH key to use
+  -p, --protocol      Specify SSH or HTTPS when cloning git repositories
 ```
 
 1. Run the command `sitgrep` in the terminal with any additional arguments as needed.
@@ -88,52 +94,53 @@ optional arguments:
 6. Optional: Export triaged results in JSON format
     * Exporting exports all findings that are not deleted. Findings that are hidden by the filter are also included.
 
-# Github Packages
-
-``--github/-gh`` and ``--gitlab/-gl`` can be used for Github packages in both ``local`` mode and normal mode.
-
-# Local Mode
-
-`sitgrep local` uses local rules, sourced from Semgrep's [open source rules Github](https://github.com/semgrep/semgrep-rules).
-
-`sitgrep local --github` downloads the packages, listed in a text file or in the command line:
-
-```sitgrep local --github list.txt ```
-
-or
-
-```sitgrep local --github Package1,Package2 ```
-
-Note: `--github` overrides the `-d/--directory` parameter
 
 ## Source Management
-Sitgrep offers a way to dynamically add, delete, and list sources:
+Sitgrep offers a way to dynamically add, delete, and list rule sources:
 
-AddSource - Adds a new source by specifying a name and URL to the source repository
-
+AddSource - Adds a new rule source by specifying a name/ID, URL, and categories for the source repository. Leave URL blank if manually placed into `~/.sitgrep/rules/`
 ```
-sitgrep sources add --name <src> --url <path_to_src_repo>
-```
-
-DeleteSource - Deletes a source with a given name
-```
-sitgrep sources delete --name <src>
+sitgrep sources add --id <id> --url <repo_url> --categories <categories>
 ```
 
-ListSources - List all sources
+DeleteSource - Deletes a rule source with a given name/ID
+```
+sitgrep sources delete --id <id>
+```
+
+ListSources - List all rule sources
 ```
 sitgrep sources list
 ```
 
-RestoreSources - Restore the original source list
+RestoreSources - Restore the original rule source list
 ```
 sitgrep sources restore
 ```
 
+# Github and Gitlab Packages
+
+``--github/-g`` can be used for Github packages in both ``local`` mode and normal mode. Usage matches the ``a`` flag, which the details of can be found below.
+
+# Local Mode
+
+`sitgrep local` should be used for all AWS scans, as this uses local rules, sourced from Semgrep's open source rules github, instead of Semgrep's official registry.
+
+`sitgrep local --github/--gitlab` downloads the packages, listed in a text file or in the command line:
+
+```sitgrep local --github/--gitlab list.txt ```
+
+or
+
+```sitgrep local --github/--gitlab Package1,Package2 ```
+
+Note: `--github/--gitlab` overrides the `-d/--directory` parameter
+
+
 ### How to create list.txt?
 The `--github/--gitlab` parameter looks for a text file or a list of Github/Gitlab URLs. 
 
-### Don't want to scan? Only want to download the repositories?
+### Don't want to scan? Only want to download the packages?
 
 No problem! Use the `-N/--no-scan` flag to only download the repositories without scanning them.
 
