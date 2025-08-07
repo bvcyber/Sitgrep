@@ -1,8 +1,11 @@
-from utils import messages as msg
 import importlib
+from typing import Callable
 from git import RemoteProgress
-from rich.progress import Progress, BarColumn, TextColumn
 from rich.console import Console
+from utils import messages as msg
+from rich.progress import Progress, BarColumn, TextColumn
+
+console = Console()
 
 
 def hsv_to_rgb(h, s, v):
@@ -40,6 +43,20 @@ def rgb_to_hex(rgb):
 
 
 class ProgressBar(RemoteProgress):
+    OP_CODES = [
+        "BEGIN",
+        "CHECKING_OUT",
+        "COMPRESSING",
+        "COUNTING",
+        "END",
+        "FINDING_SOURCES",
+        "RECEIVING",
+        "RESOLVING",
+        "WRITING",
+    ]
+
+    OP_CODE_MAP = {getattr(RemoteProgress, _op_code): _op_code for _op_code in OP_CODES}
+
     def __init__(self, target="", hide=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -48,12 +65,20 @@ class ProgressBar(RemoteProgress):
             BarColumn(),
             "[progress.percentage]{task.percentage:.2f}%",
             transient=hide,
+            console=console,
         )
         self.msg = f"Cloning {target}"
         self.task = self.progress.add_task(self.msg, total=100)
         self.total_progress = 0
         self.total_max = 0
         self.count = 0
+
+    @classmethod
+    def get_curr_op(cls, op_code: int) -> str:
+        """Get OP name from OP code."""
+        # Remove BEGIN- and END-flag and get op name
+        op_code_masked = op_code & cls.OP_MASK
+        return cls.OP_CODE_MAP.get(op_code_masked, "?").title()
 
     def start(self):
         self.progress.start()
@@ -68,15 +93,10 @@ class ProgressBar(RemoteProgress):
                 self.task, completed=cur_count, total=max_count, description=self.msg
             )
 
-            if cur_count == self.total_max and self.count >= 4:
-                self.stop()
-            elif cur_count == self.total_max:
-                self.count += 1
-
     def finish(self):
         """Finish the progress bar manually if needed."""
         if self.task and self.progress:
-            self.stop()
+            self.progress.stop()
 
     def stop(self):
         self.progress.stop()

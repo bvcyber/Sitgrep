@@ -238,12 +238,9 @@ function loadMoreTemplate(count, groupID) {
     moreDiv.onclick = function () {
         findingLoadingElement.style.display = "block";
         moreDiv.remove()
-
         setTimeout(() => {
             loadMore(groupID);
         }, 0);
-        
-
     };
 
     // Append inner div to main container div
@@ -652,7 +649,6 @@ function code_template(code, lineNumber, start_line, end_line, filePath) {
         let index = i - start_line
         const lang = getLanguageByExtension(filePath);
         lines[index] = hljs.highlight(lines[index], {language:lang, ignoreIllegals:true}).value;
-        
         if (i == lineStart && i == lineEnd){
             codeElement.appendChild(highlighted_code_line_template(lines[index], true, true))
         }

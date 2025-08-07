@@ -1,15 +1,17 @@
 import os
-import shutil
-from utils.progressbar import ProgressBar
-import yaml
 import sys
-import json
 import git
+import yaml
+import json
+import shutil
 import getpass
-from utils import messages as msg
+import validators
 from rich.console import Console
-from rich.progress import Progress, BarColumn, TextColumn
+from utils import messages as msg
 from rich.traceback import install
+from utils.progressbar import ProgressBar
+from rich.progress import Progress, BarColumn, TextColumn
+
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
@@ -18,6 +20,7 @@ LOCAL_FILES = f"{USER_HOME}/.sitgrep"
 LOCAL_RULES = f"{LOCAL_FILES}/rules/"
 SOURCES_PATH = os.path.join(LOCAL_FILES, "config", "sources.json")
 SOURCES_BAK_PATH = os.path.join(LOCAL_FILES, "config", ".sources.json")
+
 
 def hsv_to_rgb(h, s, v):
     """Converts HSV to RGB."""
@@ -47,14 +50,17 @@ def hsv_to_rgb(h, s, v):
     if i == 5:
         return v, p, q
 
+
 def rgb_to_hex(rgb):
     """Converts RGB to a hex color code."""
     return "#{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2])
 
+
 def src_json(src):
     return {"sources": src}
 
-def get_sources(path = SOURCES_PATH) -> list:
+
+def get_sources(path=SOURCES_PATH) -> list:
 
     try:
         sources = []
@@ -62,10 +68,10 @@ def get_sources(path = SOURCES_PATH) -> list:
             sources = json.load(f)["sources"]
         return sources
     except FileNotFoundError:
-        print("sources.json not found.")
+        console.print("sources.json not found.")
         return sources
     except json.JSONDecodeError:
-        print("sources.json is not valid JSON.")
+        console.print("sources.json is not valid JSON.")
         return sources
 
 
@@ -75,32 +81,35 @@ class SourceHandler:
         self.origin = LOCAL_FILES
         self.excluded_folders = []
         self.clone_progress = ProgressBar(target="rule repository")
-    
+
     def add_source(self, args):
-        msg.info(f"Adding source, name: {args.name}, url: {args.url}")
-        
+        msg.info(
+            f"Adding source: ID={args.id}, URL={args.url}, categories={args.categories}"
+        )
+
         new_src = {}
-        new_src["name"] = args.name
+        new_src["id"] = args.id
         new_src["url"] = args.url
+        new_src["categories"] = args.categories
 
         sources = get_sources()
         sources.append(new_src)
 
         with open(SOURCES_PATH, "w") as f:
             json.dump(src_json(sources), f, indent=2)
-        
+
         sys.exit(0)
 
     def delete_source(self, args):
-        msg.info(f"Deleting source, name: {args.name}")
+        msg.info(f"Deleting source: ID={args.id}")
 
         sources = get_sources()
 
         for index, source in enumerate(sources):
-            if source["name"] == args.name:
+            if source["id"] == args.id:
                 del sources[index]
                 break
-        
+
         with open(SOURCES_PATH, "w") as f:
             json.dump(src_json(sources), f, indent=2)
 
@@ -116,14 +125,23 @@ class SourceHandler:
 
     def list_sources(self, args):
         sources = get_sources()
-        print(json.dumps(sources, indent=2))
+        console.print(json.dumps(sources, indent=2))
         sys.exit(0)
+
+    def get_sources_by_type(self, type: str) -> dict:
+        sources = get_sources()
+        refined_sources = []
+        for source in sources:
+            for category in source["categories"]:
+                if str(category).lower() == str(type).lower():
+                    refined_sources.append(source)
+        return src_json(refined_sources)
 
     def exclude_folders(self, directory, excluded_folders):
         """Excludes specific folders from a directory."""
         return [f for f in os.listdir(directory) if f not in excluded_folders]
 
-    def download_git_repo(self, url, dest):
+    def download_git_repo(self, url, dest, error_count):
         """Downloads the Semgrep rules repository."""
         self.repo_dest = os.path.join(LOCAL_FILES, "rules", dest)
         self.repo_url = url
@@ -132,19 +150,21 @@ class SourceHandler:
             if os.path.exists(self.repo_dest):
                 shutil.rmtree(self.repo_dest)
 
-            git.Repo.clone_from(self.repo_url, self.repo_dest, branch=None, progress=self.clone_progress)   # type: ignore
-  
+            git.Repo.clone_from(self.repo_url, self.repo_dest, branch=None, progress=self.clone_progress)  # type: ignore
+
             msg.info(f"Repository cloned successfully to {self.repo_dest}")
-            return 0
+            return 0, error_count
 
         except git.GitCommandError as e:
-            print()
-            msg.error(f"Error cloning repository: ", console)
-            sys.exit(1)
+            console.print()
+            msg.error(f"Error cloning repository [{dest}]: \n\t{e}\n", console, False)
+            error_count += 1
+            return 1, error_count
         except Exception as e:
-            print()
-            msg.error(f"Error cloning repository: ", console)
-            sys.exit(1) 
+            console.print()
+            msg.error(f"Error cloning repository [{dest}]: \n\t{e}\n", console, False)
+            error_count += 1
+            return 1, error_count
 
     def is_valid_yaml_file(self, file_path):
         """Checks if a YAML file is valid based on certain rules."""
@@ -164,9 +184,8 @@ class SourceHandler:
                             "aws-access-token",
                             "use-escapexml",
                             "use-jstl-escaping",
-                            "generic-api-key",
                             "html-in-template-string",
-                            "var-in-script-tag"
+                            "var-in-script-tag",
                         ]:
                             return False
                     if "metadata" in rule:
@@ -183,8 +202,11 @@ class SourceHandler:
                                 return False
                         else:
                             return False
-                        for key in ["confidence", "impact", "likelihood"] :
-                            if key not in rule["metadata"] and "owasp-mobile" not in rule["metadata"]:
+                        for key in ["confidence", "impact", "likelihood"]:
+                            if (
+                                key not in rule["metadata"]
+                                and "owasp-mobile" not in rule["metadata"]
+                            ):
                                 return False
                     else:
                         return False
@@ -203,21 +225,21 @@ class SourceHandler:
         """Prunes unnecessary files from the repository."""
         count = 0
         progress = 0
-        total = self.count_files(directory)  # Assuming this method gives the total number of files
+        total = self.count_files(directory)
 
         with Progress(
             TextColumn("[bold blue]{task.description}"),
             BarColumn(),
             "[progress.percentage]{task.percentage:.2f}%",
-            transient=True  # Makes the progress bar disappear once done
+            transient=True,
+            console=console,
         ) as progress_bar:
-            task = progress_bar.add_task("Pruning files", total=total)
+            task = progress_bar.add_task("Removing non-security rules", total=total)
 
-            # Loop through the files in the directory
             for root, _, files in os.walk(directory):
                 for file in files:
                     file_path = os.path.join(root, file)
-                    
+
                     if file_path.endswith((".yaml", ".yml")):
                         if not self.is_valid_yaml_file(file_path):
                             os.remove(file_path)
@@ -225,7 +247,7 @@ class SourceHandler:
                     else:
                         os.remove(file_path)
                         count += 1
-                    
+
                     progress += 1
                     # Update the progress bar
                     progress_bar.update(task, completed=progress)
@@ -233,9 +255,9 @@ class SourceHandler:
             # Optionally remove the .github directory if it exists
             if os.path.exists(f"{directory}.github"):
                 shutil.rmtree(f"{directory}.github")
-                
-        # print(f"\nPruned {count} files")
-        # print(f"Kept {total - count} files")
+
+        # console.print(f"\nPruned {count} files")
+        # console.print(f"Kept {total - count} files")
 
     def organize_rules(self, directory):
         """Organizes the rules by their language."""
@@ -253,7 +275,7 @@ class SourceHandler:
                     if not languages:
                         continue
 
-                    language_dir = f"{self.repo_dest}/{languages[0]}"
+                    language_dir = os.path.join(self.repo_dest, languages[0])
                     if not os.path.exists(language_dir):
                         os.makedirs(language_dir)
 
@@ -269,26 +291,37 @@ class SourceHandler:
 
     def fetch_sources(self, args):
         """Runs the complete process: cloning, organizing, pruning."""
+        error_count = 0
         try:
             for repo in get_sources():
-                status = self.download_git_repo(repo["url"], repo["name"])
+                if not validators.url(repo["url"]) and not os.path.isdir(
+                    os.path.join(LOCAL_RULES, repo["id"])
+                ):
+                    msg.info(
+                        f'Skipping source "{repo["id"]}" since not a valid URL. URL={repo["url"]}'
+                    )
+                    continue
+                if not validators.url(repo["url"]) and os.path.isdir(
+                    os.path.join(LOCAL_RULES, repo["id"])
+                ):
+                    continue
+                status, error_count = self.download_git_repo(
+                    repo["url"], repo["id"], error_count
+                )
                 try:
-                    if status == 0 and repo["url"] == "https://github.com/semgrep/semgrep-rules":
+                    if (
+                        status == 0
+                        and repo["url"] == "https://github.com/semgrep/semgrep-rules"
+                    ):
                         if os.path.isdir(os.path.join(self.repo_dest, "contrib")):
                             self.organize_rules(os.path.join(self.repo_dest, "contrib"))
-
                         if os.path.isdir(os.path.join(self.repo_dest, "problem-based-packs")):
                             self.organize_rules(os.path.join(self.repo_dest, "problem-based-packs"))
-
-                    self.prune_files(self.repo_dest)
-
+                            
                 except Exception as e:
-                    msg.error(f"Error while pruning rule repository: ", console )
-                    sys.exit(1)
-            sys.exit(0)
-
+                    msg.error(f"Error while pruning rule repository: ", console)
         except Exception as e:
-            msg.error(f"Error while cloning rule repository: ", console )
-            sys.exit(1)
-
-   
+            msg.error(f"Error while cloning rule repository: ", console)
+        self.prune_files(LOCAL_RULES)
+        msg.info(f"Finished fetching sources with {error_count} error(s)")
+        sys.exit(0)

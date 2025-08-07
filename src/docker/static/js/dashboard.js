@@ -128,7 +128,6 @@ function getPackageData() {
 
   let result = []
   let tempData = {};
-
   sitgrepResults.forEach(group => {
     group.findings.forEach(finding => {
       for (let obj of packageList) {
@@ -139,11 +138,11 @@ function getPackageData() {
           else {
             tempData[obj.project] = 1;
           }
+       
         }
       }
     });
   });
-
   for(var key in tempData){
     result.push({"package": key, "findings": tempData[key]})
   }
