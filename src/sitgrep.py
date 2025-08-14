@@ -32,7 +32,7 @@ from rich_argparse import RichHelpFormatter
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
-VERSION = "3.7.3"
+VERSION = "3.7.4"
 TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"
