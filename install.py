@@ -9,6 +9,7 @@ import getpass
 import argparse
 from argparse import HelpFormatter
 from rich.console import Console
+from rich_argparse import RichHelpFormatter
 
 console = Console(color_system="truecolor")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
@@ -185,7 +186,7 @@ def prechecks():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(formatter_class=HelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=RichHelpFormatter)
     parser.add_argument("-w", "--overwrite", action="store_true")
     args = parser.parse_args()
     prechecks()
