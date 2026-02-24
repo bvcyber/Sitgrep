@@ -1,4 +1,22 @@
-![HTML Screenshot](assets/sitgrep-slogan.png)
+<div align="center">
+
+  <img src="https://github.com/bvcyber.png" alt="Bureau Veritas" width="64" />
+
+
+  ![HTML Screenshot](assets/sitgrep-slogan.png)
+  
+  # Sitgrep
+
+  > One sentence description of what this is and why it exists.
+
+  [![License](https://img.shields.io/badge/license-GNU--LGPL--v3-green)](LICENSE)
+  [![Status](https://img.shields.io/badge/status-active-brightgreen.svg)]()
+
+  [Docs](#) · [Report an Issue](issues)
+
+</div>
+
+---
 
 Sitgrep is a wrapper for [Semgrep](https://github.com/semgrep/semgrep) that makes it quick and easy to scan code for insecure coding practices and hard-coded secrets.
 
@@ -177,9 +195,17 @@ If contributing Semgrep rules, please use Semgrep's rule playground to write and
 ## Adding Your Own Rules
 If you want to add your own rules, put them in the `.sitgrep/rules/local/` folder
 
-# Authors and acknowledgment
-- Original author and current maintainer: [John Ascher @ Security Innovation](https://github.com/S0meday)
+# Acknowledgment
+
 - Semgrep engine: [Semgrep](https://github.com/semgrep/)
 - Semgrep rules: [Semgrep rules registry](https://github.com/semgrep/semgrep-rules) by Semgrep
 - Android rules: [MindedSecurity rules registry](https://github.com/mindedsecurity/semgrep-rules-android-security) by IMQ Minded Security
 - Mobile rules: [insideapp-oss rules registry](https://github.com/insideapp-oss/mobile-application-security-rules) by insideapp-oss
+
+---
+
+<div align="center">
+
+  Maintained by [John Ascher](https://github.com/S0meday) @ [Bureau Veritas](https://cybersecurity.bureauveritas.com/)
+
+</div>
