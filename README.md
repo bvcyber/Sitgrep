@@ -7,7 +7,7 @@
   
   # Sitgrep
 
-  > One sentence description of what this is and why it exists.
+  > Enhance your code review.
 
   [![License](https://img.shields.io/badge/license-GNU--LGPL--v3-green)](LICENSE)
   [![Status](https://img.shields.io/badge/status-active-brightgreen.svg)]()
@@ -18,9 +18,9 @@
 
 ---
 
-Sitgrep is a wrapper for [Semgrep](https://github.com/semgrep/semgrep) that makes it quick and easy to scan code for insecure coding practices and hard-coded secrets.
+Sitgrep is a wrapper for [Opengrep](https://github.com/opengrep/opengrep) that makes it quick and easy to scan code for insecure coding practices and hard-coded secrets. Additionally, Sitgrep provides an agentic review of findings to pre-triage findings for you. 
 
-Sitgrep offers an intuitive solution for scanning GitHub and GitLab repositories. By simply providing a link to any repository, Sitgrep will automatically download and perform a thorough scan, streamlining the process for reviewing code for security issues. It then generates a results pag, which gets automatically opened, allowing you to review findings quicker and export results for your client, saving you precious time while on your engagement. Additionally, this can be used locally without sending metrics which makes it viable for scanning proprietary code that is not public, making it perfect for when clients are a bit reluctant to run a static analysis tool on their code base.
+Sitgrep offers an intuitive solution for scanning GitHub and GitLab repositories. By simply providing a link to any repository, Sitgrep will automatically download and perform a thorough scan, streamlining the process for reviewing code for security issues. It then generates a results page, which gets automatically opened, allowing you to review findings quicker and export results for your client, saving you precious time while on your engagement. Additionally, this can be used locally without sending metrics which makes it viable for scanning proprietary code that is not public, making it perfect for when clients are a bit reluctant to run a static analysis tool on their code base.
 
 ![HTML Screenshot](assets/dashboard.png)
 ![HTML Screenshot](assets/findings.png)
@@ -80,13 +80,15 @@ python3 -m pip uninstall sitgrep
 
 # Usage
 ```
-sitgrep {local,sources} [options] 
+sitgrep {local,sources} [-h] [-c CONTEXT] [-d DIRECTORY] [-o OUTPUT] [-n Download_Only] [-s Output_Scapper_Config]
 
 Example: sitgrep -c 2 -d ~/my/dir/ -o output_file 
 
 positional arguments:
   local                           Enable local mode
+    -a, --amazon                  Provide a list of code packages to download and scan. Overrides the directory parameter (-d)
     -N, --no-scan                 Only download the packages, do not scan them. (default=False)
+    -s, --output-scapper-config   Output a scapper config-compatible list of packages. (default=False)
 
   sources             Manage sources
     add                 Add a source
@@ -94,6 +96,7 @@ positional arguments:
     list                List all sources
     restore             Restore original sources
     fetch               Fetch all sources
+    export              Export rules to ZIP file
 
 optional arguments:
   -h, --help          Show this help message and exit
@@ -102,7 +105,7 @@ optional arguments:
   -o, --output        The output file name
   -V, --version       Print Sitgrep's version   
   -v, --verbose       Increase verbosity level (default 0, max of 3)
-  -j, --json-input    Load a Semgrep JSON output file
+  -j, --json-input    Load a Opengrep JSON output file
   -n, --no-auto-open Disable auto-opening the results in the browser
   -gh, --github       Provide a list of Github repositories to download and scan. Overrides the directory parameter (-d)
   -gl, --gitlab       Provide a list of Gitlab repositories to download and scan. Overrides the directory parameter (-d)
@@ -110,6 +113,9 @@ optional arguments:
   -vs, --vscode       Open the folder being scanned in VSCode after scan finishes. Only usable when not using --github or --gitlab
   -i, --ssh-key       Specify an SSH key to use
   -p, --protocol      Specify SSH or HTTPS when cloning git repositories
+  -ai, --agent        Enable AI triaging after scan finishes
+  -l, --model         Specify the Ollama model to use for local instances
+  -ae, --agent-endpoint Specify the Ollama server endpoint
 ```
 
 1. Run the command `sitgrep` in the terminal with any additional arguments as needed.
@@ -120,6 +126,19 @@ optional arguments:
 6. Optional: Export triaged results in JSON format
     * Exporting exports all findings that are not deleted. Findings that are hidden by the filter are also included.
 
+## Agentic Review
+Sitgrep provides an agentic AI review of findings to identify false positives. Don't worry, the results will simply be marked by the AI with it's decision and reasoning. It won't just delete them altogether, resulting in false negatives. 
+
+*NOTE*: This feature may take several hours to complete, depending on how many findings. You will want to keep the device from sleeping during this to prevent the agent from hanging. 
+
+### Requirements
+- It is recommended to have the equivelant of the following to use agentic review:
+  - M-series chip Mac with at least 32GB of RAM
+  - 14–16 GB VRAM for dedicated GPUs
+
+### Features
+- Choose from several different models to run locally to be catered to your hardware's capabilities (smaller models will have worse results)
+- Choose an Ollama server location to allow dedicated Ollama servers to handle processing of data to bypass local hardware capabilities
 
 ## Source Management
 Sitgrep offers a way to dynamically add, delete, and list rule sources:
@@ -142,6 +161,11 @@ sitgrep sources list
 RestoreSources - Restore the original rule source list
 ```
 sitgrep sources restore
+```
+
+ExportSources - Export all currently downloaded rules to a ZIP file
+```
+sitgrep sources export --output <file_path>
 ```
 
 # Github and Gitlab Packages
@@ -193,11 +217,11 @@ For any issues that aren't resolved by these potential fixes, please open an iss
 If contributing Semgrep rules, please use Semgrep's rule playground to write and test the rules before submitting them to Sitgrep.
 
 ## Adding Your Own Rules
-If you want to add your own rules, put them in the `.sitgrep/rules/local/` folder
+If you want to add your own rules, put them in the `~/.sitgrep/rules/local/` folder
 
 # Acknowledgment
 
-- Semgrep engine: [Semgrep](https://github.com/semgrep/)
+- Opengrep: [Semgrep](https://github.com/opengrep/opengrep)
 - Semgrep rules: [Semgrep rules registry](https://github.com/semgrep/semgrep-rules) by Semgrep
 - Android rules: [MindedSecurity rules registry](https://github.com/mindedsecurity/semgrep-rules-android-security) by IMQ Minded Security
 - Mobile rules: [insideapp-oss rules registry](https://github.com/insideapp-oss/mobile-application-security-rules) by insideapp-oss
