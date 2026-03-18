@@ -83,7 +83,7 @@ function render() {
         }
 
         document.getElementById('loading-animation').style.display = 'none';
-        main.style.display = 'block';
+        main.style.display = 'inline-flex';
     }
     else {
         setTimeout(() => {
@@ -137,7 +137,7 @@ function buildAllFindings(main, sortedFindings, pageContents) {
             main.appendChild(buildPagination());
         }
         document.getElementById('loading-animation').style.display = 'none';
-        main.style.display = 'block';
+        main.style.display = 'inline-flex';
 
     }
 }
@@ -146,11 +146,11 @@ function buildFinding(finding, resultsDiv, shouldHide) {
 
     const start = finding["start"];
     const end = finding["end"];
-    const file_size = finding["file-size"];
+    const file_size = finding["file_size"];
     const file = finding["file"];
     const findingId = finding["id"];
     const fullFile = finding["fullFile"];
-
+    const agent_review = finding["agent_review"] ?? null;
 
     let span = end - start;
     let start_line = Math.max(start - contextLength, 1);
@@ -159,7 +159,7 @@ function buildFinding(finding, resultsDiv, shouldHide) {
     let linkLine = start === end ? `L${start}` : `L${start}-L${end}`;
     const link = generatePackageUrl(packageList, file, linkLine, fullFile);
 
-    resultsDiv.appendChild(PACKAGES ? finding_template_linked(file, line, findingId, link) : finding_template(file, line, findingId));
+    resultsDiv.appendChild(finding_template_linked(file, line, findingId, link, agent_review));
 
     let contextDivs = resultsDiv.querySelectorAll(".context");
     let latestFinding = contextDivs[contextDivs.length - 1];
@@ -218,6 +218,14 @@ function buildFindingsContexts(findingGroup, resultsDiv) {
     };
 
 
+}
+function getIcon(link) {
+    if (link.includes("github"))
+        return "static/img/github.svg"
+    else if (link.includes("gitlab"))
+        return "static/img/gitlab.svg"
+    else
+        return "static/img/vscode.png"
 }
 function loadMoreTemplate(count, groupID) {
     // Create main container div
@@ -444,6 +452,14 @@ function owasp_template(wasp) {
     return metadataValueDiv;
 }
 
+function createAiBlock(label, value, bgColor) {
+    const block = document.createElement("div");
+    block.classList.add("ai-badge");
+    block.style.background = bgColor;
+    block.textContent = `${label}: ${value}`;
+    return block;
+}
+
 function cwe_template(cwe) {
     // Create metadata value div
     var metadataValueDiv = document.createElement('div');
@@ -453,71 +469,21 @@ function cwe_template(cwe) {
     return metadataValueDiv;
 }
 
-
-function finding_template(file, line, findingId) {
-    // Create main container div
-    var contextDiv = document.createElement('div');
-    contextDiv.classList.add('context', 'bordered');
-    contextDiv.id = findingId;
-
-    // Create context options div
-    var contextOptsDiv = document.createElement('div');
-    contextOptsDiv.classList.add('context-opts');
-    contextDiv.appendChild(contextOptsDiv);
-
-    // Create context file div
-    var contextFileDiv = document.createElement('div');
-    contextFileDiv.classList.add('context-file');
-    var fileFindingP = document.createElement('p');
-    fileFindingP.classList.add('file-finding');
-    fileFindingP.textContent = file + ":" + line;
-    contextFileDiv.appendChild(fileFindingP);
-    contextOptsDiv.appendChild(contextFileDiv);
-
-    // Create context buttons div
-    var contextBtnsDiv = document.createElement('div');
-    contextBtnsDiv.classList.add('contextBtns');
-    contextOptsDiv.appendChild(contextBtnsDiv);
-
-    // Create delete button
-    var deleteButton = document.createElement('button');
-    deleteButton.classList.add('delete-button', 'context-btn');
-    deleteButton.setAttribute('onclick', `deleteContext('${findingId}')`);
-    var deleteIcon = document.createElement('i');
-    deleteIcon.classList.add('material-icons');
-    deleteIcon.textContent = 'delete';
-    deleteButton.appendChild(deleteIcon);
-    contextBtnsDiv.appendChild(deleteButton);
-
-    // Create copy button
-    var copyButton = document.createElement('button');
-    copyButton.classList.add('context-btn');
-    copyButton.setAttribute('onclick', 'copy_code_block(this)');
-    var copyIcon = document.createElement('i');
-    copyIcon.classList.add('fa-regular', 'fa-copy');
-    copyButton.appendChild(copyIcon);
-    contextBtnsDiv.appendChild(copyButton);
-
-    // Create context table div
-    var contextTableDiv = document.createElement('div');
-    contextTableDiv.classList.add('context_table');
-    contextDiv.appendChild(contextTableDiv);
-
-    // Create code lines div
-    var codeLinesDiv = document.createElement('div');
-    codeLinesDiv.classList.add('code-lines');
-    codeLinesDiv.innerHTML = '\n';
-    contextTableDiv.appendChild(codeLinesDiv);
-
-    // Create code content div
-    var codeContentDiv = document.createElement('div');
-    codeContentDiv.classList.add('code-content');
-    contextTableDiv.appendChild(codeContentDiv);
-
-    return contextDiv;
+function getApp(link) {
+    const url = new URL(link);
+    const host = url.hostname.split(".").slice(0, -1).join(".");
+    if (host.toLocaleLowerCase() == "github"){
+        return "Github"
+    }
+    else if (host.toLocaleLowerCase() == "gitlab") {
+        return "Gitlab"
+    }
+    else {
+        return "VSCode"
+    }
 }
 
-function finding_template_linked(file, line, findingId, link) {
+function finding_template_linked(file, line, findingId, link, agent_review=null) {
     // Create main container div
     var contextDiv = document.createElement('div');
     contextDiv.classList.add('context', 'bordered');
@@ -536,27 +502,103 @@ function finding_template_linked(file, line, findingId, link) {
 
     // Creating elements
     var content = document.createElement("div");
-    var linkSpan = document.createElement("span");
     var fileSpan = document.createElement("span");
-    var linkAnchor = document.createElement("a");
 
     // Setting attributes and content
     content.style.display = "flex";
     content.style.flexDirection = "row"
     fileSpan.style.marginRight = "5px"
     fileSpan.textContent = file + ":" + line;
-    linkAnchor.href = link;
-    linkAnchor.target = "_blank";
-    linkAnchor.style.color = "#95d1e7";
-    linkAnchor.textContent = "view";
 
     // Appending elements
     content.append(fileSpan)
-    linkSpan.appendChild(linkAnchor);
-    content.appendChild(linkSpan);
     fileFindingP.appendChild(content);
-
     contextFileDiv.appendChild(fileFindingP);
+
+    // Add AI bot results
+    if (agent_review != null) {
+        const ai_sev = agent_review["severity"];
+        const ai_thought = agent_review["thought"];
+
+        var ai_content = document.createElement("div");
+        ai_content.style.display = "flex";
+        ai_content.style.flexDirection = "row";
+        ai_content.style.gap = "6px";
+        ai_content.classList.add("ai-review");
+
+        var ai_icon = document.createElement("img");
+        ai_icon.src = "static/img/bot.png"
+        ai_icon.style.width = "25px";
+        ai_icon.style.height = "25px";
+
+        const sevEl = createAiBlock("Severity", ai_sev, "#d9534f");      // red-ish
+
+        const reasonEl = document.createElement("div");
+        reasonEl.classList.add("ai-badge");
+        reasonEl.classList.add("ai_thought");
+        reasonEl.style.background = "#444";
+        reasonEl.textContent = "Reason";
+
+        let tooltip = null;
+
+        function showTooltip() {
+            if (tooltip) return; // already open
+
+            tooltip = document.createElement("div");
+            tooltip.classList.add("ai-floating-tooltip");
+            tooltip.textContent = ai_thought;
+            document.body.appendChild(tooltip);
+
+            const rect = reasonEl.getBoundingClientRect();
+            const gap = 12;
+
+            // Position below the badge
+            tooltip.style.position = "absolute";
+            tooltip.style.left = `${window.scrollX + rect.left + rect.width / 2}px`;
+            tooltip.style.top = `${window.scrollY + rect.bottom + gap}px`;
+            tooltip.style.transform = "translateX(-50%)";
+
+            // Hide on mouse leaving reason or tooltip
+            function hideTooltip() {
+                if (tooltip) {
+                    tooltip.remove();
+                    tooltip = null;
+                    reasonEl.removeEventListener("mouseleave", hideTooltip);
+                    tooltip.removeEventListener("mouseleave", hideTooltip);
+                }
+            }
+
+            reasonEl.addEventListener("mouseleave", hideTooltip);
+            tooltip.addEventListener("mouseleave", hideTooltip);
+        }
+
+        reasonEl.addEventListener("click", (e) => {
+            e.stopPropagation();
+
+            if (tooltip) {
+                // Tooltip already open → close it
+                tooltip.remove();
+                tooltip = null;
+            } else {
+                showTooltip();
+            }
+        });
+
+        // Hide tooltip if clicking elsewhere on the page
+        document.body.addEventListener("click", () => {
+            if (tooltip) {
+                tooltip.remove();
+                tooltip = null;
+            }
+        });
+
+        ai_content.appendChild(ai_icon);      
+        ai_content.appendChild(sevEl);
+        ai_content.appendChild(reasonEl);
+
+        contextFileDiv.appendChild(ai_content);
+    }
+    
     contextOptsDiv.appendChild(contextFileDiv);
 
     // Create context buttons div
@@ -567,6 +609,7 @@ function finding_template_linked(file, line, findingId, link) {
     // Create delete button
     var deleteButton = document.createElement('button');
     deleteButton.classList.add('delete-button', 'context-btn');
+    deleteButton.title = "Delete";
     deleteButton.setAttribute('onclick', `deleteContext('${findingId}')`);
     var deleteIcon = document.createElement('i');
     deleteIcon.classList.add('material-icons');
@@ -577,11 +620,26 @@ function finding_template_linked(file, line, findingId, link) {
     // Create copy button
     var copyButton = document.createElement('button');
     copyButton.classList.add('context-btn');
-    copyButton.setAttribute('onclick', 'copy_code_block(this)');
+    copyButton.title = "Copy to clipboard";
+    copyButton.setAttribute("onclick", "copy_code_block(this)");
     var copyIcon = document.createElement('i');
     copyIcon.classList.add('fa-regular', 'fa-copy');
     copyButton.appendChild(copyIcon);
     contextBtnsDiv.appendChild(copyButton);
+
+    var viewButton = document.createElement('a');
+    viewButton.classList.add('view-btn');
+    viewButton.href = link;
+    viewButton.target = "_blank";
+    viewButton.title = `View in ${getApp(link)}`;
+    var viewIcon = document.createElement('img');
+    viewIcon.src = getIcon(link);  
+    viewIcon.alt = 'View';
+    viewIcon.style.width = '16px';
+    viewIcon.style.height = '16px';
+
+    viewButton.appendChild(viewIcon);
+    contextBtnsDiv.appendChild(viewButton);
 
     // Create context table div
     var contextTableDiv = document.createElement('div');
@@ -977,9 +1035,9 @@ function generatePackageUrl(packages, file, line, fullFile) {
     try {
         if (packages && packages.length > 0) {
             for (let package of packages) {
-                let fileSplit = file.split("/");
+                let fileSplit = fullFile.split("/");
                 let packageIndex = fileSplit.findIndex(item => item === package.project);
-                if (file.includes(package.project) && packageIndex !== -1) {
+                if (fullFile.includes(package.project) && packageIndex !== -1) {
                     if (package.site == "github") {
                         let branch = package.branch !== "" ? package.branch : "master";
                         file = fileSplit.slice(packageIndex + 1).join("/");
@@ -1000,7 +1058,6 @@ function generatePackageUrl(packages, file, line, fullFile) {
                         }
 
                         fileUrl = `vscode://file/${fullFile}:${lineNumber}`
-                        console.log(fileUrl)
                     }
                 }
                 else {
@@ -1008,7 +1065,14 @@ function generatePackageUrl(packages, file, line, fullFile) {
             }
         }
         else {
-            //console.log(file)
+            let lineNumber = line.replace("L", "")
+            let lineSplit = line.split("-")
+
+            if(lineSplit.length == 2){
+                lineNumber = lineSplit[0].replace("L", "")
+            }
+
+            fileUrl = `vscode://file/${fullFile}:${lineNumber}`
         }
     } catch (e) {
         console.error(`There was an issue generating package links for filepath ${fileOg} : ${e}`);

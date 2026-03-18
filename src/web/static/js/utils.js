@@ -87,23 +87,14 @@ function sha256(message) {
 }
 
 function getIndexById(id, list) {
-
-    for (let i = 0; i < list.length; i++) {
-        if (list[i].id.toString().toLowerCase() == id.toString().toLowerCase()) {
-            return i;
-        }
-    }
-    return -1;
+    const normalizedId = String(id).toLowerCase();
+    return list.findIndex(item =>
+        String(item.id).toLowerCase() === normalizedId
+    );
 }
 
 function getIndexByRuleId(ruleid, list) {
-
-    for (let i = 0; i < list.length; i++) {
-        if (list[i].rule_id == ruleid) {
-            return i;
-        }
-    }
-    return -1;
+    return list.findIndex(item => item.rule_id === ruleid);
 }
 
 function indexOfDict(dictionary, list) {
@@ -144,7 +135,7 @@ function getNextWeekDateTime() {
 }
 
 function scrollToTop() {
-    document.getElementById('contentContainer').scrollTo({ top: 0, behavior: "smooth" });
+    document.getElementById('main-content').scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function redirectToRuleGroup(ruleGroupId) {
@@ -166,32 +157,34 @@ function setScrollPosition(newPosition) {
     document.getElementById('contentContainer').scrollTop = newPosition;
 }
 
-function showCopiedNotification(button) {
-    const notification = document.createElement('div');
-    notification.textContent = 'Copied to clipboard!';
-    notification.classList.add('copied-notification');
-    const rect = button.getBoundingClientRect();
-    notification.style.left = `${rect.left + window.scrollX - 140}px`;
-    notification.style.top = `${rect.top + window.scrollY - 50}px`;
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-        document.body.removeChild(notification);
-    }, 2000);
-}
-
 function copy_code_block(button) {
-    const context = button.parentNode.parentNode.parentNode;
-    var code = context.querySelector('code');
+  const context = button.parentNode.parentNode.parentNode;
+  var code = context.querySelector("code");
 
-    code = code.innerHTML;
-    code = code.replace(/<\/?(span|div)(?:\s+[^>]*)?>/g, '');
+  code = code.innerHTML;
+  code = code.replace(/<\/?(span|div)(?:\s+[^>]*)?>/g, "");
 
-    navigator.clipboard.writeText(code)
-        .then(() => {
-            showCopiedNotification(button);
-        })
-        .catch((err) => {
-            console.error('Unable to copy:', err);
-        });
+  navigator.clipboard
+    .writeText(code)
+    .then(() => {
+      showCopiedNotification(button);
+    })
+    .catch((err) => {
+      console.error("Unable to copy:", err);
+    });
 }
+
+function showCopiedNotification(button) {
+  const notification = document.createElement("div");
+  notification.textContent = "Copied to clipboard!";
+  notification.classList.add("copied-notification");
+  const rect = button.getBoundingClientRect();
+  notification.style.left = `${rect.left + window.scrollX - 140}px`;
+  notification.style.top = `${rect.top + window.scrollY - 50}px`;
+  document.body.appendChild(notification);
+
+  setTimeout(() => {
+    document.body.removeChild(notification);
+  }, 2000);
+}
+

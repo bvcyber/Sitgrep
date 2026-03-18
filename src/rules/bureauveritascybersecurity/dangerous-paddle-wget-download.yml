@@ -43,7 +43,7 @@ rules:
           - pattern-not: |
               paddle.utils.download._wget_download("...", ...)
     metadata:
-      author: John Ascher (Security Innovation)
+      author: John Ascher (Bureau Veritas Cybersecurity)
       owasp:
         - A01:2017 - Injection
         - A03:2021 - Injection

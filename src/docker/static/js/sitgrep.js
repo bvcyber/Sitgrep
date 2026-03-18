@@ -25,8 +25,8 @@ window.addEventListener("DOMContentLoaded", (event) => {
         
     });
 
-    document.getElementById('contentContainer').onscroll = function() {
-        if (document.getElementById('contentContainer').scrollTop > 1000 || document.documentElement.scrollTop > 1000) {
+    document.getElementById('main-content').onscroll = function() {
+        if (document.getElementById('main-content').scrollTop > 1000) {
             document.getElementById('scroll-to-top').style.display = 'block';
         } else {
             document.getElementById('scroll-to-top').style.display = 'none';

@@ -1,0 +1,51 @@
+rules:
+  - id: ssm-send-command
+    languages:
+      - python
+    severity: ERROR
+    message: Detected user input flowing into ssm.send_command function. The
+      documents AWS-RunShellScript or AWS-RunPowerShellScript are default
+      documents to be used to run commands as root on the EC2 instance. If
+      user-controlled inputs are sent without sanitization as the commands, an
+      attacker can achieve remote code execution. Ensure user inputs are
+      sanitized before use.
+    metadata:
+      author: Becky Wang (Bureau Veritas Cybersecurity)
+      cwe:
+        - "CWE-78: Improper Neutralization of Special Elements used in an OS
+          Command ('OS Command Injection')"
+      owasp:
+        - A03:2021 - Injection
+      category: security
+      technology:
+        - boto3
+        - python
+      cwe2022-top25: true
+      cwe2021-top25: true
+      references:
+        - https://owasp.org/Top10/A03_2021-Injection
+        - https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ssm/client/send_command.html
+        - https://securitycafe.ro/2023/01/17/aws-post-explitation-with-ssm-sendcommand/
+      subcategory:
+        - vuln
+      likelihood: MEDIUM
+      impact: HIGH
+      confidence: MEDIUM
+    mode: taint
+    pattern-sources:
+      - pattern-either:
+          - pattern: |
+              "$STR" + ...
+          - pattern: |
+              "$STR" % ...
+          - pattern: |
+              "$STR".format(...)
+          - pattern: |
+              f"$STR{...}..."
+    pattern-sinks:
+      - patterns:
+          - pattern: >
+              $CLIENT.send_command(...,DocumentName="$DOC",...,Parameters={...,'commands':[...],...},...)
+          - metavariable-regex:
+              metavariable: $DOC
+              regex: (AWS-RunShellScript|AWS-RunPowerShellScript)

@@ -62,20 +62,21 @@ function setToken(tokenToUpdate){
 function getNextPage(){
     scrollPosition = 0;
     let token = getToken();
-    scrollToTop();
     if (token.start + token.maxResults <= MAX_INDEX && getCurrentPageNumber() < MAX_PAGES){
         token.start += token.maxResults;
         setToken(token);
     }
 
     window.history.pushState({"token":token, "page": sessionStorage.getItem("page")}, null, "");
-    render(sitgrep_results);   
+    render(sitgrep_results);
+    setTimeout(() => {
+        scrollToTop();
+    }, 50)
 }
 
 function getPreviousPage(){
     scrollPosition = 0;
     let token = getToken();
-    scrollToTop();
     if (token.start - token.maxResults >= 0){
         token.start -= token.maxResults;
         setToken(token);
@@ -83,12 +84,14 @@ function getPreviousPage(){
 
     window.history.pushState({"token":token, "page": sessionStorage.getItem("page")}, null, "");
     render(sitgrep_results);
+    setTimeout(() => {
+        scrollToTop();
+    }, 50)
 }
 1 
 function getPage(page){
     scrollPosition = 0;
     let token = getToken();
-    scrollToTop();
     let page_index = parseInt(page) * token.maxResults - token.maxResults;
     if (page_index >= 0 && page_index <= MAX_INDEX){
         token.start = page_index
@@ -97,6 +100,9 @@ function getPage(page){
 
     window.history.pushState({"token":token, "page": sessionStorage.getItem("page")}, null, "");
     render(sitgrep_results);
+    setTimeout(() => {
+        scrollToTop();
+    }, 50)
 }
 
 function getCurrentPageNumber() {

@@ -1,25 +1,29 @@
 import os
+from posixpath import basename
 import sys
+import zipfile
 import git
 import yaml
+import shutil
 import json
 import shutil
 import getpass
 import validators
 from rich.console import Console
-from utils import messages as msg
+from utils import logging as log
 from rich.traceback import install
 from utils.progressbar import ProgressBar
-from rich.progress import Progress, BarColumn, TextColumn
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
+
 
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
 USER_HOME = os.path.expanduser(f"~{getpass.getuser()}")
-LOCAL_FILES = f"{USER_HOME}/.sitgrep"
-LOCAL_RULES = f"{LOCAL_FILES}/rules/"
-SOURCES_PATH = os.path.join(LOCAL_FILES, "config", "sources.json")
-SOURCES_BAK_PATH = os.path.join(LOCAL_FILES, "config", ".sources.json")
+LOCAL_FILES_PATH = f"{USER_HOME}/.sitgrep"
+LOCAL_RULES_PATH = f"{LOCAL_FILES_PATH}/rules/"
+SOURCES_PATH = os.path.join(LOCAL_FILES_PATH, "config", "sources.json")
+SOURCES_BAK_PATH = os.path.join(LOCAL_FILES_PATH, "config", ".sources.json")
 
 
 def hsv_to_rgb(h, s, v):
@@ -76,14 +80,13 @@ def get_sources(path=SOURCES_PATH) -> list:
 
 
 class SourceHandler:
-
     def __init__(self):
-        self.origin = LOCAL_FILES
+        self.origin = LOCAL_FILES_PATH
         self.excluded_folders = []
         self.clone_progress = ProgressBar(target="rule repository")
 
     def add_source(self, args):
-        msg.info(
+        log.info(
             f"Adding source: ID={args.id}, URL={args.url}, categories={args.categories}"
         )
 
@@ -101,7 +104,7 @@ class SourceHandler:
         sys.exit(0)
 
     def delete_source(self, args):
-        msg.info(f"Deleting source: ID={args.id}")
+        log.info(f"Deleting source: ID={args.id}")
 
         sources = get_sources()
 
@@ -116,7 +119,7 @@ class SourceHandler:
         sys.exit(0)
 
     def restore_sources(self, args):
-        msg.info(f"Restoring original sources")
+        log.info(f"Restoring original sources")
         sources = get_sources(SOURCES_BAK_PATH)
         with open(SOURCES_PATH, "w") as f:
             json.dump(src_json(sources), f, indent=2)
@@ -126,6 +129,31 @@ class SourceHandler:
     def list_sources(self, args):
         sources = get_sources()
         console.print(json.dumps(sources, indent=2))
+        sys.exit(0)
+
+    def export_rules(self, args):
+        output_file = os.path.join(args.output, "sitgrep_rules.zip")
+        files = [
+            os.path.join(root, f)
+            for root, _, filenames in os.walk(LOCAL_RULES_PATH)
+            for f in filenames
+            if f != ".DS_STORE"
+        ]
+
+        with Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            "[progress.percentage]{task.percentage:>3.1f}%",
+            TimeRemainingColumn(),
+        ) as progress:
+            task = progress.add_task("Zipping files", total=len(files))
+
+            with zipfile.ZipFile(output_file, "w", zipfile.ZIP_DEFLATED) as zf:
+                for file in files:
+                    arcname = os.path.relpath(file, LOCAL_RULES_PATH)
+                    zf.write(file, arcname)
+                    progress.advance(task)
+
         sys.exit(0)
 
     def get_sources_by_type(self, type: str) -> dict:
@@ -143,26 +171,28 @@ class SourceHandler:
 
     def download_git_repo(self, url, dest, error_count):
         """Downloads the Semgrep rules repository."""
-        self.repo_dest = os.path.join(LOCAL_FILES, "rules", dest)
+        self.repo_dest = os.path.join(LOCAL_FILES_PATH, "rules", dest)
         self.repo_url = url
 
         try:
             if os.path.exists(self.repo_dest):
                 shutil.rmtree(self.repo_dest)
 
-            git.Repo.clone_from(self.repo_url, self.repo_dest, branch=None, progress=self.clone_progress)  # type: ignore
+            git.Repo.clone_from(
+                self.repo_url, self.repo_dest, branch=None, progress=self.clone_progress
+            )  # type: ignore
 
-            msg.info(f"Repository cloned successfully to {self.repo_dest}")
+            log.info(f"Repository cloned successfully to {self.repo_dest}")
             return 0, error_count
 
         except git.GitCommandError as e:
             console.print()
-            msg.error(f"Error cloning repository [{dest}]: \n\t{e}\n", console, False)
+            log.error(f"Error cloning repository [{dest}]: \n\t{e}\n", console, False)
             error_count += 1
             return 1, error_count
         except Exception as e:
             console.print()
-            msg.error(f"Error cloning repository [{dest}]: \n\t{e}\n", console, False)
+            log.error(f"Error cloning repository [{dest}]: \n\t{e}\n", console, False)
             error_count += 1
             return 1, error_count
 
@@ -186,6 +216,7 @@ class SourceHandler:
                             "use-jstl-escaping",
                             "html-in-template-string",
                             "var-in-script-tag",
+                            "MSTG-ARCH-9",
                         ]:
                             return False
                     if "metadata" in rule:
@@ -286,7 +317,7 @@ class SourceHandler:
                         yaml.dump({"rules": [rule]}, rule_output_file)
                         count += 1
 
-        # msg.info(f"Organized {count} files")
+        # log.info(f"Organized {count} files")
         shutil.rmtree(directory)
 
     def fetch_sources(self, args):
@@ -295,14 +326,14 @@ class SourceHandler:
         try:
             for repo in get_sources():
                 if not validators.url(repo["url"]) and not os.path.isdir(
-                    os.path.join(LOCAL_RULES, repo["id"])
+                    os.path.join(LOCAL_RULES_PATH, repo["id"])
                 ):
-                    msg.info(
+                    log.info(
                         f'Skipping source "{repo["id"]}" since not a valid URL. URL={repo["url"]}'
                     )
                     continue
                 if not validators.url(repo["url"]) and os.path.isdir(
-                    os.path.join(LOCAL_RULES, repo["id"])
+                    os.path.join(LOCAL_RULES_PATH, repo["id"])
                 ):
                     continue
                 status, error_count = self.download_git_repo(
@@ -315,13 +346,17 @@ class SourceHandler:
                     ):
                         if os.path.isdir(os.path.join(self.repo_dest, "contrib")):
                             self.organize_rules(os.path.join(self.repo_dest, "contrib"))
-                        if os.path.isdir(os.path.join(self.repo_dest, "problem-based-packs")):
-                            self.organize_rules(os.path.join(self.repo_dest, "problem-based-packs"))
-                            
+                        if os.path.isdir(
+                            os.path.join(self.repo_dest, "problem-based-packs")
+                        ):
+                            self.organize_rules(
+                                os.path.join(self.repo_dest, "problem-based-packs")
+                            )
+
                 except Exception as e:
-                    msg.error(f"Error while pruning rule repository: ", console)
+                    log.error(f"Error while pruning rule repository: ", console)
         except Exception as e:
-            msg.error(f"Error while cloning rule repository: ", console)
-        self.prune_files(LOCAL_RULES)
-        msg.info(f"Finished fetching sources with {error_count} error(s)")
+            log.error(f"Error while cloning rule repository: ", console)
+        self.prune_files(LOCAL_RULES_PATH)
+        log.info(f"Finished fetching sources with {error_count} error(s)")
         sys.exit(0)

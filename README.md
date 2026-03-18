@@ -86,7 +86,6 @@ Example: sitgrep -c 2 -d ~/my/dir/ -o output_file
 
 positional arguments:
   local                           Enable local mode
-    -a, --amazon                  Provide a list of code packages to download and scan. Overrides the directory parameter (-d)
     -N, --no-scan                 Only download the packages, do not scan them. (default=False)
     -s, --output-scapper-config   Output a scapper config-compatible list of packages. (default=False)
 
@@ -174,7 +173,7 @@ sitgrep sources export --output <file_path>
 
 # Local Mode
 
-`sitgrep local` should be used for all AWS scans, as this uses local rules, sourced from Semgrep's open source rules github, instead of Semgrep's official registry.
+`sitgrep local` should be used for all local scans, as this uses local rules, sourced from Semgrep's open source rules github, instead of Semgrep's official registry.
 
 `sitgrep local --github/--gitlab` downloads the packages, listed in a text file or in the command line:
 
