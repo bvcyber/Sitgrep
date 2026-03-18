@@ -102,6 +102,7 @@ def extract_tool_calls(msg, agent: AgentType):
 
     return tool_calls
 
+
 def extract_tools_invocation(response_dict, tools):
     command_str = response_dict.get("command", "")
     command_str = " ".join(command_str.split())
@@ -123,7 +124,7 @@ def extract_tools_invocation(response_dict, tools):
         node = ast.parse(f"f({args_str})", mode="eval")
         call = node.body
         kwargs = {}
-        for kw in call.keywords: # type: ignore
+        for kw in call.keywords:  # type: ignore
             try:
                 kwargs[kw.arg] = ast.literal_eval(kw.value)
             except Exception:
@@ -134,11 +135,12 @@ def extract_tools_invocation(response_dict, tools):
             k: v.replace('"', '\\"') if isinstance(v, str) else v
             for k, v in kwargs.items()
         }
-        
+
     except (ValueError, SyntaxError) as e:
         raise ValueError(f"Failed to parse tool args: {args_str}") from e
 
     return tool_name, kwargs_escaped
+
 
 def get_ai_message(output: Any, agent: AgentType):
     if agent == AgentType.JUDGE:
@@ -413,10 +415,12 @@ def getPackageName(file_path, packages):
                 return file
     return ""
 
+
 def safe_invoke(tool, args):
     valid_keys = tool.args.keys()
     filtered = {k: v for k, v in args.items() if k in valid_keys}
     return tool.invoke(filtered)
+
 
 def process_json(results, dir, packages, AGENTIC=False) -> dict:
 
@@ -637,7 +641,9 @@ def save_raw_semgrep_output(results: object):
         json.dump(results, output, indent=4)
 
 
-def agent_analyze(model: model.OllamaModel, scan_results: dict, directory: str, agent_endpoint: str) -> dict:
+def agent_analyze(
+    model: model.OllamaModel, scan_results: dict, directory: str, agent_endpoint: str
+) -> dict:
 
     agent = SitgrepAgent(model, directory, agent_endpoint)
     agent.start()
@@ -687,7 +693,7 @@ def agent_analyze(model: model.OllamaModel, scan_results: dict, directory: str, 
 
                 try:
                     engineer_raw = agent.send(AgentType.ENGINEER, engineer_input)
-              
+
                     if VERBOSE_LEVEL > 2:
                         log.debug(engineer_raw)
 
@@ -696,7 +702,7 @@ def agent_analyze(model: model.OllamaModel, scan_results: dict, directory: str, 
                     state["messages"].append(
                         HumanMessage(content=f"Engineer output: {engineer_output}")
                     )
-                    
+
                     state["done"] = engineer_output.get("done", False)
 
                     if state["done"] or state["iteration"] > 2:
@@ -709,25 +715,33 @@ def agent_analyze(model: model.OllamaModel, scan_results: dict, directory: str, 
                         )  # type: ignore
                         result["agent_review"] = judge_result
                         break
-                    
+
                     try:
-                        tool_name, args = extract_tools_invocation(engineer_output, agent.tool_map) # type: ignore
+                        tool_name, args = extract_tools_invocation(
+                            engineer_output, agent.tool_map
+                        )  # type: ignore
                         tool_call_result = ""
 
                         if tool_name in agent.tool_map:
-                            tool_call_result = safe_invoke(agent.tool_map[tool_name], args)
+                            tool_call_result = safe_invoke(
+                                agent.tool_map[tool_name], args
+                            )
                             if VERBOSE_LEVEL > 1:
                                 log.debug(tool_call_result)
                         else:
                             raise ValueError(f"Unknown tool: {tool_name}")
 
-                        state["messages"].append(ToolMessage(content=str(tool_call_result).replace("\n", "\\n"), tool_call_id=tool_name))
+                        state["messages"].append(
+                            ToolMessage(
+                                content=str(tool_call_result).replace("\n", "\\n"),
+                                tool_call_id=tool_name,
+                            )
+                        )
 
                     except Exception as tool_e:
                         log.error(f"Tool error: {tool_e}", console)
                 except Exception as e:
                     log.error(f"Error calling agent: {e}", console)
-               
 
             # Restart bot to preserve stability
             agent.restart(True)
@@ -857,7 +871,6 @@ def get_url_for_site(
     project_name: str, package_details: dict, with_ssh: bool, site: str
 ) -> str:
     match site:
-
         case "github":
             if with_ssh:
                 return f"git@github.com:{package_details['path']}/{project_name}.git"
@@ -1042,7 +1055,6 @@ def download_packages(packages: list, protocol: str, key: str = ""):
     log.info(f"Downloading {len(packages)} package(s)...")
 
     for package in packages:
-    
         progress_bar = ProgressBar(target=package["project"])
         clone_repo(failed_packages, package, progress_bar, protocol, key)
 
@@ -1092,7 +1104,6 @@ def split_packages(packages: list, mode: str):
     split_packages = []
     for package in packages:
         if "https://" in package or "http://" in package:
-     
             if "github.com" in package and mode == "github":
                 parsed_github_url = parse_github_url(package)
 
@@ -1164,6 +1175,7 @@ def get_package_list(packages):
         sys.exit(1)
 
     return package_list
+
 
 def getFolders(dir):
     directory_items = os.listdir(dir)
@@ -1334,13 +1346,13 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
             if has_key
             else download_packages(packages, args.protocol)
         )
-   
+
         if args.no_scan:
             sys.exit(1)
     elif LOCAL_MODE:
         if len(packages) == 0:
             packages = get_packages_from_dir(directory)
-    
+
     elif len(packages) > 0 and ALLOW_DOWNLOAD:
         (
             download_packages(packages, args.protocol, args.ssh_key)
@@ -1361,7 +1373,9 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
                 open_dir_in_vscode(dir=directory)
 
             if AGENT_ENABLED:
-                results = agent_analyze(args.model, scan_results, directory, args.agent_endpoint)
+                results = agent_analyze(
+                    args.model, scan_results, directory, args.agent_endpoint
+                )
                 save_results(results, output_file, directory, packages, AGENTIC=True)
 
         elif "errors" in scan_results and len(scan_results["errors"]) > 0:
@@ -1491,21 +1505,14 @@ def main(args):
         directory = decompiled_src_dir
 
     try:
-        if (
-            not hasattr(args, "github")
-            and not hasattr(args, "gitlab")
-        ):
+        if not hasattr(args, "github") and not hasattr(args, "gitlab"):
             packages = get_packages_from_dir(directory)
-        elif (
-            hasattr(args, "github")
-            or hasattr(args, "gitlab")
-        ):
+        elif hasattr(args, "github") or hasattr(args, "gitlab"):
             ALLOW_DOWNLOAD = True
 
             github_packages: list = []
             gitlab_packages: list = []
 
-       
             if (
                 hasattr(args, "github")
                 and isinstance(args.github, list)
@@ -1545,10 +1552,7 @@ def main(args):
         )
         sys.exit(1)
     except Exception:
-        if (
-            hasattr(args, "github")
-            or hasattr(args, "gitlab")
-        ):
+        if hasattr(args, "github") or hasattr(args, "gitlab"):
             log.error("There was an error gathering package data: ", console)
         else:
             log.error(
