@@ -6,12 +6,18 @@ function loadFindings() {
     window.history.pushState({"token":token, "page": "findings"}, null, "");
     setToken(token);
     resetFilter();
+    setTimeout(() => {
+        scrollToTop();
+    }, 50)
 }
 
 function loadDashboard() {
     sessionStorage.setItem('page', "dashboard");
     window.history.pushState({"token":getToken(), "page": "dashboard"}, null, "");
     resetFilter();
+    setTimeout(() => {
+        scrollToTop();
+    }, 50);
 }
 
 function loadFalsePositives() {
@@ -22,6 +28,9 @@ function loadFalsePositives() {
     window.history.pushState({"token":token, "page": "findings"}, null, "");
     setToken(token);
     resetFilter();
+    setTimeout(() => {
+        scrollToTop();
+    }, 50);
 }
 
 function loadFindingsFromDashboard() {
@@ -32,4 +41,7 @@ function loadFindingsFromDashboard() {
     window.history.pushState({"token":token, "page": "findings"}, null, "");
     setToken(token);
     render();
+    setTimeout(() => {
+        scrollToTop();
+    }, 50);
 }

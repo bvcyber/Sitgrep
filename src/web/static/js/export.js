@@ -33,6 +33,7 @@ function exportToJson() {
             if (context.start != context.end){
                 line = `${context.start}-${context.end}`
             }
+            context.line = line;
         });
 
         json.results.push(finding)

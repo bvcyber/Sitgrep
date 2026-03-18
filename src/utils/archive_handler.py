@@ -8,7 +8,7 @@ import shutil
 import hashlib
 from pathlib import Path
 import time
-from utils import messages as msg
+from utils import logging as log
 from rich.console import Console
 
 
@@ -65,20 +65,20 @@ def extract_if_archive(file_path):
         if not file_path.endswith(".rar"):
             os.makedirs(extract_dir)
     except PermissionError as pe:
-        msg.error(
+        log.error(
             f"Permission denied: cannot create or overwrite extraction directory: {extract_dir}",
             False,
         )
-        msg.error(f"Details: {pe}", console, False)
+        log.error(f"Details: {pe}", console, False)
         raise
     except Exception as e:
-        msg.error(
+        log.error(
             f"Failed to prepare extraction directory: {extract_dir}", console, False
         )
-        msg.error(f"Details: {e}", console, False)
+        log.error(f"Details: {e}", console, False)
         raise
 
-    msg.info(f"Extracting archive to: {extract_dir}")
+    log.info(f"Extracting archive to: {extract_dir}")
 
     try:
         # Handle .zip files
@@ -104,19 +104,19 @@ def extract_if_archive(file_path):
         # Handle .rar files
         elif file_path.endswith(".rar"):
             if not rarfile.UNRAR_TOOL:
-                msg.error(
+                log.error(
                     "RAR archive detected, but no supported extractor was found.",
                     console,
                     False,
                 )
-                msg.warn("Please install one of the following to proceed:")
-                msg.warn("  • macOS: brew install unar or rar")
-                msg.warn("  • Ubuntu/Debian: sudo apt install unar or unrar")
+                log.warn("Please install one of the following to proceed:")
+                log.warn("  • macOS: brew install unar or rar")
+                log.warn("  • Ubuntu/Debian: sudo apt install unar or unrar")
                 raise Exception("Missing system extractor for RAR files")
 
             with rarfile.RarFile(file_path) as rf:
                 if rf.needs_password():
-                    msg.warn("Skipping password-protected RAR archive.")
+                    log.warn("Skipping password-protected RAR archive.")
                     raise Exception(
                         "RAR archive is password-protected and cannot be extracted."
                     )
@@ -125,8 +125,8 @@ def extract_if_archive(file_path):
                     try:
                         rf.extractall(path=extract_dir)
                     except rarfile.BadRarFile as bre:
-                        msg.warn(f"RAR archive may be corrupted: {file_path}")
-                        msg.warn(f"Details: {bre}")
+                        log.warn(f"RAR archive may be corrupted: {file_path}")
+                        log.warn(f"Details: {bre}")
                         raise
 
         # Handle .7z files
@@ -134,12 +134,12 @@ def extract_if_archive(file_path):
             with py7zr.SevenZipFile(file_path, mode="r") as z:
                 z.extractall(path=extract_dir)
         else:
-            msg.error("No method of extraction for the given file type", console, False)
+            log.error("No method of extraction for the given file type", console, False)
 
         return extract_dir
 
     # General extraction failure handling
     except Exception as e:
-        msg.error(f"Failed to extract archive: {file_path}", console)
+        log.error(f"Failed to extract archive: {file_path}", console)
         shutil.rmtree(extract_dir, ignore_errors=True)
         raise

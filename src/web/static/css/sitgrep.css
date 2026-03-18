@@ -8,6 +8,79 @@ h3 {
   width: 50%;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
+.ai-badge {
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: white;
+    white-space: nowrap;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+
+}
+
+.ai_thought {
+  cursor: pointer;
+}
+
+.ai-review {
+  padding: 5px;
+  border: #363535 1px solid;
+  border-radius: 5px;
+}
+
+/* Tooltip container */
+.ai-tooltip {
+    position: relative;
+    cursor: pointer;
+}
+
+.ai-floating-tooltip {
+    background: #222;
+    color: #fff;
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 18px;
+    width: 620px;
+    max-width: 100vw;
+    line-height: 1.4;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 999999;
+    pointer-events: none;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+
+}
+
+
+/* Hidden tooltip text */
+.ai-tooltip-text {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #222;
+    color: #fff;
+
+    padding: 12px 14px;      /* bigger padding */
+    border-radius: 8px;      /* slightly softer corners */
+    font-size: 16px;         /* 🔥 bigger text */
+    line-height: 1.4;        /* better readability */
+    width: 620px;            /* wider box */
+    white-space: normal;
+
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35); /* makes it feel elevated */
+    transition: opacity 0.2s ease;
+    z-index: 999999;
+}
+
+
+/* Show on hover */
+.ai-tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
 div#version {
   width: 20%;
   text-align: right;
@@ -152,9 +225,30 @@ div#topBar {
   background-color: rgba(0, 0, 0, 0.263);
 }
 
+.view-btn {
+  padding-inline: 6px;
+  padding-block: 1px;
+  width: 20px;
+  height: 20px;
+  padding-top: 2px;
+  display: flex;
+  align-items: center;
+  flex-direction: row-reverse;
+}
+
+.delete-button {
+    padding: 0;
+    align-self: center;
+    height: 28px !important;
+}
+
 .material-icons:active,
 .fa:active {
   transform: translateY(4px);
+}
+
+.material-icons {
+  padding-top: 2px;
 }
 
 #menu-title {
@@ -435,10 +529,11 @@ code {
 
 .container {
   display: flex;
-  height: 100%;
+  /* height: 100%; */
   flex-direction: column;
   justify-content: flex-start;
-  overflow-x: hidden;
+  /* overflow-x: hidden; */
+  width: 100%;
 }
 
 pre code.hljs {
@@ -537,6 +632,7 @@ pre code.hljs {
   color: white;
   border: none;
   float: right;
+  padding-right: 15px;
 }
 .contextBtns {
   display: flex;
@@ -558,7 +654,7 @@ pre code.hljs {
 .context-btn {
   float: right;
   color: white;
-  font-size: 24px;
+  font-size: 18px;
   background-color: transparent;
   border: none;
   height: fit-content;
@@ -594,9 +690,28 @@ pre code.hljs {
   align-items: center;
 }
 #main-content {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;
+    overflow-x: hidden;
+    overflow-y: scroll;
+    height: 100%;
+    scroll-behavior: smooth;
+    max-height: 100%;
+    min-height: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    /* margin: 20px; */
+    flex-wrap: nowrap;
+    flex-direction: column;
+    margin-top: 64px;
+    /* padding-top: 20px; */
+    padding-bottom: 100px;
+    width: 100%;
+    display: inline-flex;
+    align-content: center;
+    align-items: center;
+    flex-wrap: nowrap;
+    flex-direction: column;
+    justify-content: flex-start;
+    anchor-name: --main-content;
 }
 
 #loading-animation {
@@ -647,6 +762,19 @@ pre code.hljs {
   height: 30px;
   width: 30px;
   display: block;
+}
+
+div#topBar {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-right: 20px;
+  align-content: center;
+  align-items: center;
+  position: fixed;
+  border-bottom: 0.5px solid #3a3939;
+  top: 0;
+  width: 100%;
 }
 
 
@@ -700,14 +828,23 @@ pre code.hljs {
 }
 
 .opts {
-  width: 300px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  min-width: 300px;
-  height: 100%;
-  border-right: 0.5px solid #3a3939;
-  padding-left: 10px;
-  padding-right: 10px;
+    width: 300px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-width: 300px;
+    height: 100%;
+    border-right: 0.5px solid #3a3939;
+    padding-left: 10px;
+    padding-right: 10px;
+    margin-top: 63px;
+    display: inline-flex;
+    flex-flow: column;
+    align-items: center;
+    place-content: center flex-start;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-content: center;
+    justify-content: flex-start;
 }
 
 .more{
@@ -726,7 +863,7 @@ pre code.hljs {
 #page-title {
   display: flex;
   width: 100%;
-  margin-left: 65px;
+  margin-left: 20px;
   height: fit-content;
   font-size: 3em;
   padding: 5px 0 5px 0;
@@ -744,12 +881,14 @@ pre code.hljs {
 }
 
 .main {
-  display: flex;
-  flex-direction: row;
-  margin-bottom: 10px;
-  margin-left: 46px;
-  align-items: flex-start;
-  border-top: 1px solid #302f2f;
+    display: flex;
+    flex-direction: row;
+    margin-bottom: 10px;
+    align-items: flex-start;
+    position: fixed;
+    left: 46px;
+    height: 100%;
+    width: calc(100% - 49px);
 }
 
 hr.solid {
@@ -775,9 +914,6 @@ a:visited {
 
 #scroll-to-top {
   display: none;
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
   z-index: 99;
   background-color: rgb(2, 148, 213);
   color: #fff;
@@ -785,6 +921,10 @@ a:visited {
   border-radius: 5px;
   padding: 10px 20px;
   cursor: pointer;
+  left: anchor(--main-content center);
+  position: absolute;
+  bottom: 20px;
+  transform: translateX(-50%);
 }
 
 div button {
@@ -905,13 +1045,15 @@ pre {
 }
 
 .rule-group {
-  margin: 15px;
-  -webkit-box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.4);
-  -moz-box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.4);
-  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.4);
-  border-radius: 5px;
-  /* border: 1px solid rgb(42, 42, 42); */
-  background-color: rgb(26 28 33);
+    margin: 20px;
+    -webkit-box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.4);
+    -moz-box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.4);
+    box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.4);
+    border-radius: 5px;
+    background-color: rgb(26 28 33);
+    width: calc(100% - 20px);
+
+    
 }
 
 .filterBtns {

@@ -1,38 +1,49 @@
+import argparse
+import json
 import os
 import re
-import sys
-import json
-import time
 import shlex
 import shutil
-import argparse
 import subprocess
+import sys
+import time
 import webbrowser
-import urllib.request
-from packaging import version
+from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
-from utils import messages as msg
+import ast
+import rs_chardet
+from git import Repo
+from git.exc import GitCommandError
+from langchain.messages import AIMessage, HumanMessage, ToolMessage
+from pydantic import BaseModel
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import (
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
+from rich.prompt import Prompt
+from rich.syntax import Syntax
+from rich.text import Text
+from rich.traceback import install
+from rich_argparse import RichHelpFormatter
+
+from agent import agent, model
+from agent.agent import SitgrepAgent
+from agent.agents.types import AgentType
+from utils import logging as log
+from utils.archive_handler import extract_if_archive
 from utils.progressbar import ProgressBar
 from utils.source_handler import SourceHandler
-from git import Repo
-import rs_chardet
-from pathlib import Path
-from rich.text import Text
-from rich.text import Text
-from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.prompt import Prompt
-from rich.console import Console
-from rich.traceback import install
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from git.exc import GitCommandError
-from utils.archive_handler import extract_if_archive
-from rich_argparse import RichHelpFormatter
 
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
-VERSION = "3.7.4"
+VERSION = "3.8.0"
 TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"
@@ -42,6 +53,7 @@ VERBOSE_LEVEL = 0
 CONTEXT_LINE_COUNT = 5
 MODES = ["GENERAL", "MOBILE"]
 PROTOCOLS = ["SSH", "HTTPS"]
+AGENT_ENABLED = False
 
 
 class BadScanException(Exception):
@@ -57,7 +69,7 @@ def check_path(filename: str):
         raise FileNotFoundError
 
 
-def validate_choices(value: str) -> list:
+def validate_mode(value: str) -> list:
     choices = value.split(",")
     for choice in choices:
         if str(choice).upper() not in MODES:
@@ -74,10 +86,82 @@ def detect_encoding(file_path: str):
     return result
 
 
+def extract_tool_calls(msg, agent: AgentType):
+    messages = msg["messages"]
+    tool_calls = {agent.value: []}
+
+    for msg in messages:
+        if isinstance(msg, AIMessage) and len(msg.tool_calls) > 0:
+            call = {}
+            call["name"] = msg.tool_calls[0]["name"]
+            call["args"] = msg.tool_calls[0]["args"]
+            tool_calls[agent.value].append(call)
+
+    if VERBOSE_LEVEL > 2:
+        log.debug(tool_calls)
+
+    return tool_calls
+
+def extract_tools_invocation(response_dict, tools):
+    command_str = response_dict.get("command", "")
+    command_str = " ".join(command_str.split())
+
+    if not command_str:
+        return None
+
+    # parse: grep_search(file_path="...", pattern="...")
+    match = re.match(r"(\w+)\((.*)\)$", command_str.strip())
+    if not match:
+        return None
+
+    tool_name = match.group(1)
+    args_str = match.group(2)
+
+    # parse keyword args
+    try:
+        # wrap in dict() call so ast can parse it
+        node = ast.parse(f"f({args_str})", mode="eval")
+        call = node.body
+        kwargs = {}
+        for kw in call.keywords: # type: ignore
+            try:
+                kwargs[kw.arg] = ast.literal_eval(kw.value)
+            except Exception:
+                # fallback if not a literal
+                kwargs[kw.arg] = ast.unparse(kw.value)
+
+        kwargs_escaped = {
+            k: v.replace('"', '\\"') if isinstance(v, str) else v
+            for k, v in kwargs.items()
+        }
+        
+    except (ValueError, SyntaxError) as e:
+        raise ValueError(f"Failed to parse tool args: {args_str}") from e
+
+    return tool_name, kwargs_escaped
+
+def get_ai_message(output: Any, agent: AgentType):
+    if agent == AgentType.JUDGE:
+        content = output.model_dump()
+        if VERBOSE_LEVEL > 1:
+            log.debug(content)
+        return content
+    else:
+        messages = output["messages"]
+        for msg in messages:
+            if isinstance(msg, AIMessage) and str(msg.content).strip():
+                if VERBOSE_LEVEL > 1:
+                    log.debug(json.loads(str(msg.content)))
+                return json.loads(str(msg.content))
+
+        log.warn("Got empty response from agent...")
+        return json.loads("{}")
+
+
 def ensure_environment_set(env_name: str):
     env_val = os.environ.get(env_name)
     if not env_val:
-        msg.error(f"{env_name} is not set. Please set {env_name}", console, False)
+        log.error(f"{env_name} is not set. Please set {env_name}", console, False)
         return False
     return True
 
@@ -85,7 +169,7 @@ def ensure_environment_set(env_name: str):
 def ensure_program_installed(tool_name: str):
     tool_cmd = shutil.which(tool_name)
     if not tool_cmd:
-        msg.error(
+        log.error(
             f"{tool_name} is not installed. Please install {tool_name}", console, False
         )
         return False
@@ -96,8 +180,8 @@ def ensure_program_installed(tool_name: str):
 # cfr can be switched to jadx later
 def decompile_jar(jar_file_path: str, output_dir: str):
     jd_path = os.path.join(INSTALL_DIR, "tools", "cfr-0.152.jar")
-    msg.info(f"Jar File Path: {jar_file_path}")
-    msg.info(f"Java Decompiler Path: {jd_path}")
+    log.info(f"Jar File Path: {jar_file_path}")
+    log.info(f"Java Decompiler Path: {jd_path}")
     cfr_cmd = [
         "java",
         "-jar",
@@ -108,7 +192,7 @@ def decompile_jar(jar_file_path: str, output_dir: str):
         "--outputdir",
         output_dir,
     ]
-    msg.info("Decompiling...")
+    log.info("Decompiling...")
 
     try:
         process = subprocess.Popen(
@@ -116,18 +200,18 @@ def decompile_jar(jar_file_path: str, output_dir: str):
         )
         stdout, stderr = process.communicate()
         if stdout:
-            msg.info(f"{stdout}")
+            log.info(f"{stdout}")
         if stderr:
             if "Unable to access jarfile" in stderr:
                 raise FileNotFoundError
             else:
-                msg.warn(f"{stderr}")
-        msg.info(f"Successfully decompiled {jar_file_path} to {output_dir}")
+                log.warn(f"{stderr}")
+        log.info(f"Successfully decompiled {jar_file_path} to {output_dir}")
     except FileNotFoundError:
-        msg.error(f"{jd_path} file not found", console, False)
+        log.error(f"{jd_path} file not found", console, False)
         sys.exit(1)
     except Exception:
-        msg.error("An error occurred: {e}", console, False)
+        log.error("An error occurred: {e}", console, False)
         sys.exit(1)
 
 
@@ -147,24 +231,25 @@ def scan(dir: str, mode: str, output_file: str):
             text=True,
         )
         stdout, stderr = process.communicate()
-    except:
-        msg.error("Failed to invoke Semgrep. Exiting.", console, False)
+    except Exception:
+        log.error("Failed to invoke Opengrep. Exiting.", console, False)
         sys.exit(1)
 
     try:
         source_dict: dict = SourceHandler().get_sources_by_type(mode)
         configs = source_dict["sources"]
         cmd = [
-            "semgrep",
+            "opengrep",
             "scan",
             "--json",
+            "--taint-intrafile",
             "--exclude=sitgrep-report*",
             "--exclude=sitgrep-config.json",
             "--exclude=semgrep_output.json",
             "--exclude=tst",
             "--exclude=tests",
             "--no-git-ignore",
-            f"-o semgrep-scan-{TIMESTR}",
+            f"-o opengrep-scan-{TIMESTR}",
         ]
 
         if VERBOSE_LEVEL > 2:
@@ -172,23 +257,23 @@ def scan(dir: str, mode: str, output_file: str):
         elif VERBOSE_LEVEL == 2:
             cmd.extend(["--verbose"])
 
-        if LOCAL_MODE:
-            cmd.extend(["--metrics=off"])
-        else:
+        if not LOCAL_MODE:
             cmd.extend(["--config", "auto"])
 
         for config in configs:
             config_path = os.path.join(INSTALL_DIR, "rules", config["id"])
             if os.path.isdir(config_path) or os.path.isfile(config_path):
+                if not LOCAL_MODE and config["id"] == "semgrep":
+                    continue
                 cmd.extend(["--config", config_path])
             else:
-                msg.warn(f"Config path {config_path} not found. Skipping...")
+                log.warn(f"Config path {config_path} not found. Skipping...")
 
         cmd.extend([shell_safe_path(dir)])
 
         cmd_string = " ".join(cmd)
         output = {}
-        msg.info(f"Started Semgrep at {msg.time()}")
+        log.info("Starting Opengrep...")
         with Progress(
             TextColumn("[progress.description]{task.description}"),
             SpinnerColumn(),
@@ -205,10 +290,10 @@ def scan(dir: str, mode: str, output_file: str):
             ) as process:
                 isScanning = False
                 task1 = progress.add_task(
-                    msg.get_info("Semgrep is loading rules..."), total=None
+                    log.get_info("Opengrep is loading rules..."), total=None
                 )
                 task2 = progress.add_task(
-                    msg.get_info("Scanning... this may take a few minutes..."),
+                    log.get_info("Scanning..."),
                     start=False,
                     visible=False,
                 )
@@ -237,16 +322,19 @@ def scan(dir: str, mode: str, output_file: str):
         raw_semgrep_output = "\n".join(lines)
 
         if VERBOSE_LEVEL > 0:
-            console.print(Panel.fit(raw_semgrep_output, title="Semgrep output"))
+            console.print(Panel.fit(raw_semgrep_output, title="Opengrep output"))
 
         process.wait()
-        if os.path.isfile(f"semgrep-scan-{TIMESTR}"):
-            with open(f"semgrep-scan-{TIMESTR}") as output:
+
+        if os.path.isfile(f"opengrep-scan-{TIMESTR}"):
+            with open(f"opengrep-scan-{TIMESTR}") as output:
                 try:
                     output = json.loads(str(output.read()))
-                    os.remove(f"semgrep-scan-{TIMESTR}")
+                    os.remove(f"opengrep-scan-{TIMESTR}")
                 except Exception:
-                    msg.error("", console)
+                    log.error(
+                        "Error occurred while loading the output for parsing", console
+                    )
                     sys.exit(1)
         else:
             raise BadScanException
@@ -254,66 +342,66 @@ def scan(dir: str, mode: str, output_file: str):
 
         if VERBOSE_LEVEL > 0:
             console.print("\n")
-            # msg.info("-------------- Semgrep output end --------------")
-            msg.info(f"Semgrep command used: ")
+            # log.info("-------------- Opengrep output end --------------")
+            log.info("Opengrep command used: ")
             console.print(
                 Syntax(cmd_string, "bash", word_wrap=True, padding=(0, 0, 0, 12))
             )
             console.print("\n")
-            msg.info(
-                f"The raw Semgrep JSON output was saved to {os.getcwd()+'/semgrep_output.json'}"
+            log.info(
+                f"The raw Opengrep JSON output was saved to {os.getcwd() + '/semgrep_output.json'}"
             )
-        msg.info(f"Semgrep scan complete at {msg.time()}")
+        log.info("Opengrep scan complete..")
 
         return output
 
     except BadScanException as bse:
         console.print()
         # if VERBOSE_LEVEL > 0:
-        #     msg.info("-------------- Semgrep output end --------------")
-        msg.error(
-            "Semgrep scan failed. Check if the specified directory is listed in a .gitignore file for the project being scanned. The specified directory or the results may also be empty.",
+        #     log.info("-------------- Opengrep output end --------------")
+        log.error(
+            "Opengrep scan failed. Check if the specified directory is listed in a .gitignore file for the project being scanned. The specified directory or the results may also be empty.",
             console,
             False,
         )
-        msg.error(str(bse), console, False)
-        msg.info(f"Semgrep command: ")
+        log.error(str(bse), console, False)
+        log.info("Opengrep command: ")
         console.print(Syntax(cmd_string, "bash", word_wrap=True, padding=(0, 0, 0, 12)))
         try:
-            os.remove(f"semgrep-scan-{TIMESTR}")
-        except:
+            os.remove(f"opengrep-scan-{TIMESTR}")
+        except Exception:
             pass
         sys.exit(1)
     except subprocess.CalledProcessError as e:
         console.print()
         # if VERBOSE_LEVEL > 0:
-        #     msg.info("-------------- Semgrep output end --------------")
+        #     log.info("-------------- Opengrep output end --------------")
 
-        msg.error(f"Semgrep returned with errors: {e.stdout}", console, False)
-        msg.info(f"Semgrep command: ")
+        log.error(f"Opengrep returned with errors: {e.stdout}", console, False)
+        log.info("Opengrep command: ")
         console.print(Syntax(cmd_string, "bash", word_wrap=True, padding=(0, 0, 0, 12)))
         try:
-            os.remove(f"semgrep-scan-{TIMESTR}")
-        except:
+            os.remove(f"opengrep-scan-{TIMESTR}")
+        except Exception:
             pass
         sys.exit(1)
 
     except FileNotFoundError:
-        msg.error(f"The specified directory could not be found: {dir}", console, False)
+        log.error(f"The specified directory could not be found: {dir}", console, False)
         sys.exit(1)
 
     except Exception:
         console.print()
         if VERBOSE_LEVEL > 0:
-            # msg.info("-------------- Semgrep output end --------------")
-            msg.info(f"Semgrep command: ")
+            # log.info("-------------- Opengrep output end --------------")
+            log.info("Opengrep command: ")
             console.print(
                 Syntax(cmd_string, "bash", word_wrap=True, padding=(0, 0, 0, 12))
             )
-        msg.error("An error occurred", console)
+        log.error("An error occurred", console)
         try:
-            os.remove(f"semgrep-scan-{TIMESTR}")
-        except:
+            os.remove(f"opengrep-scan-{TIMESTR}")
+        except Exception:
             pass
         sys.exit(1)
 
@@ -325,19 +413,21 @@ def getPackageName(file_path, packages):
                 return file
     return ""
 
+def safe_invoke(tool, args):
+    valid_keys = tool.args.keys()
+    filtered = {k: v for k, v in args.items() if k in valid_keys}
+    return tool.invoke(filtered)
 
-def process_json(results, dir, packages) -> dict:
+def process_json(results, dir, packages, AGENTIC=False) -> dict:
 
     json_results = {"sitgrepVersion": f"Sitgrep v{VERSION}", "results": []}
 
     try:
-
         if len(results) == 0:
             return results
 
         groupIndex = 0
         for index, result in enumerate(results):
-
             file = result["path"]
             finding_text = result["extra"]["lines"]
             file_path = os.path.join(START_DIR, file)
@@ -370,16 +460,41 @@ def process_json(results, dir, packages) -> dict:
 
                 context = "\n".join(context)
 
-                home_len = len((INSTALL_DIR).split("/"))
-                rule_id = result["check_id"].split(".")
-                rule_id = rule_id[home_len + 1 :]
-                rule_id = ".".join(rule_id)
+                home = (
+                    str(Path(os.path.join(INSTALL_DIR, "rules")).absolute().resolve())
+                    .replace(os.sep, ".")
+                    .replace(".", "", 1)
+                )
+                rule_id: str = result["check_id"].replace(home, "")
+                rule_id = rule_id.removeprefix(".")
+                rule_parts = rule_id.split(".")
+                rule_id = f"{rule_parts[0]}.{rule_parts[-1]}"
 
                 rule_index = get_rule_index(json_results["results"], rule_id)
 
                 new_file_path = f"{file.replace(os.path.abspath(dir), '')}"
                 if new_file_path.startswith("/"):
                     new_file_path = new_file_path[1:]
+
+                id = (
+                    f"{groupIndex}::{0}"
+                    if rule_index == -1
+                    else f"{json_results['results'][rule_index]['id']}::{len(json_results['results'][rule_index]['findings'])}"
+                )
+
+                finding = {
+                    "id": id,
+                    "file": new_file_path,
+                    "package": package_name,
+                    "context": context,
+                    "end": result["end"]["line"],
+                    "start": result["start"]["line"],
+                    "file_size": len(lines),
+                    "fullFile": file,
+                }
+
+                if AGENTIC:
+                    finding["agent_review"] = result.get("agent_review", "")
 
                 if rule_index == -1:
                     json_results["results"].append(
@@ -392,109 +507,96 @@ def process_json(results, dir, packages) -> dict:
                             "likelihood": result["extra"]["metadata"]["likelihood"],
                             "owasp": result["extra"]["metadata"]["owasp"],
                             "confidence": result["extra"]["metadata"]["confidence"],
-                            "findings": [
-                                {
-                                    "id": f"{groupIndex}::{0}",
-                                    "file": new_file_path,
-                                    "package": package_name,
-                                    "context": context,
-                                    "end": result["end"]["line"],
-                                    "start": result["start"]["line"],
-                                    "file-size": len(lines),
-                                    "fullFile": file,
-                                }
-                            ],
+                            "findings": [finding],
                         }
                     )
                     groupIndex += 1
                 else:
-                    json_results["results"][rule_index]["findings"].append(
-                        {
-                            "id": f'{json_results["results"][rule_index]["id"]}::{len(json_results["results"][rule_index]["findings"])}',
-                            "file": new_file_path,
-                            "package": package_name,
-                            "context": context,
-                            "end": result["end"]["line"],
-                            "start": result["start"]["line"],
-                            "file-size": len(lines),
-                            "fullFile": file,
-                        }
-                    )
+                    json_results["results"][rule_index]["findings"].append(finding)
 
         return json_results
     except KeyError:
-        msg.error("The following key could not be found while parsing JSON", console)
+        log.error("The following key could not be found while parsing JSON", console)
         sys.exit(1)
     except Exception:
-        msg.error("Error parsing JSON", console)
+        log.error("Error parsing JSON", console)
         sys.exit(1)
 
 
 def get_rule_index(results: list, rule_id):
     for index, result in enumerate(results):
-        if "rule_id" in result and result["rule_id"] == rule_id:
+        if result.get("rule_id") == rule_id:
             return index
     return -1
 
 
 def count_findings(results):
-    count = 0
-    for rule in results["results"]:
-        count += len(rule["findings"])
-    return count
+    return sum(len(rule["findings"]) for rule in results["results"])
 
 
-def save_results(scan_results: dict, output_file, dir="", packages=[]):
+def save_results(scan_results: dict, output_file, dir="", packages=[], AGENTIC=False):
 
     try:
-        processed_results: dict = process_json(scan_results["results"], dir, packages)
+        processed_results: dict = process_json(
+            scan_results["results"], dir, packages, AGENTIC=AGENTIC
+        )
         processed_results["packages"] = packages
         processed_results["contextLength"] = CONTEXT_LINE_COUNT
 
         if len(processed_results) > 0:
             try:
                 goto_output_dir()
-                base = open(f"{INSTALL_DIR}/web/templates/template.html", "r").read()
+                if not AGENTIC:
+                    base = open(
+                        f"{INSTALL_DIR}/web/templates/template.html", "r"
+                    ).read()
 
-                with open(f"{output_file}.html", "a") as html_file:
-                    html_file.write(base)
-                os.mkdir("static")
-                shutil.copytree(f"{INSTALL_DIR}/web/static/js", "static/js")
-                shutil.copytree(f"{INSTALL_DIR}/web/static/css", "static/css")
-                shutil.copytree(f"{INSTALL_DIR}/web/static/img", "static/img")
+                    with open(f"{output_file}.html", "a") as html_file:
+                        html_file.write(base)
+                    os.mkdir("static")
+                    shutil.copytree(f"{INSTALL_DIR}/web/static/js", "static/js")
+                    shutil.copytree(f"{INSTALL_DIR}/web/static/css", "static/css")
+                    shutil.copytree(f"{INSTALL_DIR}/web/static/img", "static/img")
 
-                if not os.path.isdir("results"):
-                    os.mkdir("results")
+                    if not os.path.isdir("results"):
+                        os.mkdir("results")
 
-                with open("results/results.js", "a") as js_file:
+                with open("results/results.js", "w") as js_file:
                     js_file.write(
                         f"const sitgrep_results = {json.dumps(processed_results)}"
                     )
                 output_file_location = os.path.abspath("{}.html".format(output_file))
-                msg.info(
-                    f'Scan results: {count_findings(processed_results)} findings after scanning {len(scan_results["paths"]["scanned"])} files'
-                )
-                msg.success(
-                    f'Results have been saved to {output_file_location.replace(os.path.expanduser("~"), "~")}'
-                )
+                if AGENTIC:
+                    log.success(
+                        f"Agentic results have been saved to file://{output_file_location}"
+                    )
+                else:
+                    log.info(
+                        f"Scan results: {count_findings(processed_results)} findings after scanning {len(scan_results['paths']['scanned'])} files"
+                    )
+                    log.success(
+                        f"Results have been saved to file://{output_file_location}"
+                    )
 
-                if not NO_OPEN:
+                    if not NO_OPEN:
+                        if os.environ.get("WSL_DISTRO_NAME", "none") == "none":
+                            webbrowser.open_new_tab(f"file://{output_file_location}")
+                        else:
+                            os.chdir(
+                                f"{'/'.join(output_file_location.split('/')[:-1])}"
+                            )
+                            webbrowser.open_new_tab(f"{output_file}.html")
 
-                    if os.environ.get("WSL_DISTRO_NAME", "none") == "none":
-                        webbrowser.open_new_tab(f"file://{output_file_location}")
-                    else:
-                        os.chdir(f'{"/".join(output_file_location.split("/")[:-1])}')
-                        webbrowser.open_new_tab(f"{output_file}.html")
             except FileExistsError as e:
-                msg.error(f"The file already exists: {e}", console, False)
+                log.error(f"The file already exists: {e}", console, False)
                 sys.exit(-1)
             except Exception:
-                msg.error("There was an error saving the file: ", console, True)
+                log.error("There was an error saving the file: ", console, True)
                 sys.exit(-1)
         else:
-            msg.success("Congrats, there were no findings.")
+            log.success("Congrats, there were no findings.")
     except Exception:
-        msg.error("There was an error saving the output: ", console, True)
+        log.error("There was an error saving the output: ", console, True)
         # traceback.print_exc()
         sys.exit(-1)
 
@@ -504,12 +606,12 @@ def goto_output_dir():
 
 
 def handle_clone_failure(error: str):
-    msg.error("A package clone failed", console, False)
+    log.error("A package clone failed", console, False)
     option = input("\tDo you wish to continue? (y/n): ")
 
     if option.lower().strip().startswith("n"):
-        msg.info("Cancelling scan...")
-        msg.error(error, console, False)
+        log.info("Cancelling scan...")
+        log.error(error, console, False)
         sys.exit(1)
 
 
@@ -522,7 +624,7 @@ def create_output_dir():
     if not os.path.isdir(OUTPUT_FOLDER):
         os.mkdir(OUTPUT_FOLDER)
     else:
-        msg.error(
+        log.error(
             "Output directory already exists. Cannot overwrite previous reports",
             console,
             False,
@@ -535,13 +637,116 @@ def save_raw_semgrep_output(results: object):
         json.dump(results, output, indent=4)
 
 
+def agent_analyze(model: model.OllamaModel, scan_results: dict, directory: str, agent_endpoint: str) -> dict:
+
+    agent = SitgrepAgent(model, directory, agent_endpoint)
+    agent.start()
+    TOTAL = len(scan_results["results"])
+
+    with Progress(
+        TextColumn("[progress.description]{task.description}"),
+        SpinnerColumn(),
+        MofNCompleteColumn(),
+        TimeRemainingColumn(),
+        transient=True,
+        speed_estimate_period=900,
+    ) as progress:
+        task = progress.add_task(
+            log.get_info("SitgrepAI analyzing findings"), total=TOTAL
+        )
+        for result in scan_results["results"]:
+            # Init Agent
+            context = {}
+            context["ai_bot_scope"] = directory
+            context["file_path"] = result["path"]
+            context["start"] = result["start"]
+            context["end"] = result["end"]
+            context["code"] = result["extra"]["lines"]
+            context["description"] = result["extra"]["message"]
+            context["confidence"] = result["extra"]["metadata"]["confidence"]
+            context["severity"] = result["extra"]["metadata"]["impact"]
+            context["likelihood"] = result["extra"]["metadata"]["likelihood"]
+
+            # Keep going until limit met or engineer is done
+            state = {
+                "messages": [
+                    HumanMessage(content=f"Here is the context: {str(context)}")
+                ],
+                "iteration": 0,
+                "done": False,
+            }
+            LIMIT = 10
+            progress.update(
+                task, description=log.get_info("Agent: Analyzing..."), advance=1
+            )
+            while state["iteration"] <= LIMIT and not state["done"]:
+                state["iteration"] += 1
+                progress.update(task, description=log.get_info("Agent: Analyzing..."))
+
+                engineer_input = str({"context": context, "history": state["messages"]})
+
+                try:
+                    engineer_raw = agent.send(AgentType.ENGINEER, engineer_input)
+              
+                    if VERBOSE_LEVEL > 2:
+                        log.debug(engineer_raw)
+
+                    engineer_output = get_ai_message(engineer_raw, AgentType.ENGINEER)
+
+                    state["messages"].append(
+                        HumanMessage(content=f"Engineer output: {engineer_output}")
+                    )
+                    
+                    state["done"] = engineer_output.get("done", False)
+
+                    if state["done"] or state["iteration"] > 2:
+                        judge_result: BaseModel = get_ai_message(
+                            agent.send(
+                                AgentType.JUDGE,
+                                str({"chat_history": str(state["messages"])}),
+                            ),
+                            AgentType.JUDGE,
+                        )  # type: ignore
+                        result["agent_review"] = judge_result
+                        break
+                    
+                    try:
+                        tool_name, args = extract_tools_invocation(engineer_output, agent.tool_map) # type: ignore
+                        tool_call_result = ""
+
+                        if tool_name in agent.tool_map:
+                            tool_call_result = safe_invoke(agent.tool_map[tool_name], args)
+                            if VERBOSE_LEVEL > 1:
+                                log.debug(tool_call_result)
+                        else:
+                            raise ValueError(f"Unknown tool: {tool_name}")
+
+                        state["messages"].append(ToolMessage(content=str(tool_call_result).replace("\n", "\\n"), tool_call_id=tool_name))
+
+                    except Exception as tool_e:
+                        log.error(f"Tool error: {tool_e}", console)
+                except Exception as e:
+                    log.error(f"Error calling agent: {e}", console)
+               
+
+            # Restart bot to preserve stability
+            agent.restart(True)
+
+    progress.update(
+        task, description=log.get_info("Agent analyses complete..."), completed=True
+    )
+    # Once done, stop the agent
+    agent.stop()
+    log.info("Agent: Analysis completed")
+    return scan_results
+
+
 def parse_github_url(url):
 
     parsed_url = urlparse(url)
     path_segments = parsed_url.path.lstrip("/").split("/")
 
     if "/blob/" in parsed_url.path:
-
         blob_index = path_segments.index("blob")
         group_path = path_segments[: blob_index - 1]
         project = path_segments[blob_index - 1]
@@ -588,7 +793,7 @@ def parse_github_url(url):
                 "branch": branch,
                 "site": "github",
             }
-        except:
+        except Exception:
             return None
 
 
@@ -598,7 +803,6 @@ def parse_gitlab_url(url):
     path_segments = parsed_url.path.lstrip("/").split("/")
 
     if "/-/blob/" in parsed_url.path:
-
         blob_index = path_segments.index("-")
         group_path = path_segments[: blob_index - 1]
         project = path_segments[blob_index - 1]
@@ -653,23 +857,24 @@ def get_url_for_site(
     project_name: str, package_details: dict, with_ssh: bool, site: str
 ) -> str:
     match site:
+
         case "github":
             if with_ssh:
-                return f'git@github.com:{package_details["path"]}/{project_name}.git'
+                return f"git@github.com:{package_details['path']}/{project_name}.git"
             else:
                 return (
-                    f'https://github.com/{package_details["path"]}/{project_name}.git'
+                    f"https://github.com/{package_details['path']}/{project_name}.git"
                 )
         case "gitlab":
             if with_ssh:
-                return f'git@gitlab.com:{package_details["path"]}/{project_name}.git'
+                return f"git@gitlab.com:{package_details['path']}/{project_name}.git"
             else:
                 return (
-                    f'https://gitlab.com/{package_details["path"]}/{project_name}.git'
+                    f"https://gitlab.com/{package_details['path']}/{project_name}.git"
                 )
         case _:
-            msg.error(
-                "Only Github and Gitlab are currently supported.",
+            log.error(
+                "Only Github and Gitlab are supported.",
                 console=console,
                 showException=True,
             )
@@ -740,14 +945,12 @@ def clone_repo(
 
         # Wait for process to finish
         process.wait()
-
+        site = package_details["site"]
         if no_auth_needed:
             return False
         elif not with_ssh:
-            username = Prompt.ask(f"Username for {package_details["site"]}")
-            password = Prompt.ask(
-                f"Passphrase for {package_details["site"]}", password=True
-            )
+            username = Prompt.ask(f"Username for {site}")
+            password = Prompt.ask(f"Passphrase for {site}", password=True)
             os.environ["GIT_USERNAME"] = username
             os.environ["GIT_PASSWORD"] = password
         elif with_ssh and key.strip() != "":
@@ -755,10 +958,10 @@ def clone_repo(
                 subprocess.run(
                     ["ssh-add", key], stdout=subprocess.PIPE, stderr=subprocess.PIPE
                 )
-                msg.info(f"Adding SSH key {key} to SSH agent...")
+                log.info(f"Adding SSH key {key} to SSH agent...")
                 return True
             except subprocess.CalledProcessError as e:
-                msg.error(f"Error adding SSH key: {e.stderr.decode()}", console, False)
+                log.error(f"Error adding SSH key: {e.stderr.decode()}", console, False)
         return False
 
     def handle_failed_package(failed_packages, project_name, error):
@@ -767,7 +970,7 @@ def clone_repo(
     try:
         check_path(os.path.expanduser(key.strip()))
     except FileNotFoundError:
-        msg.error(f"The specified key could not be found: {key}", console, False)
+        log.error(f"The specified key could not be found: {key}", console, False)
         sys.exit(1)
 
     ssh_key_path = os.path.expanduser(key.strip()).strip()
@@ -803,29 +1006,30 @@ def clone_repo(
         env.pop("GIT_SSH_COMMAND", None)
         if added_ssh_key and protocol == "SSH":
             choice = Prompt.ask(
-                msg.get_warn(
+                log.get_warn(
                     "Would you like to keep the SSH key in the SSH agent to avoid entering the password to this key in the future? (y/n)"
                 )
             )
             if choice.lower().startswith("n"):
                 subprocess.run(["ssh-add", "-d", key], check=True)
-                msg.info(f"Removing SSH key {key} from SSH agent...")
+                log.info(f"Removing SSH key {key} from SSH agent...")
 
     except GitCommandError as e:
         console.print()
-        error_msg = f"The repository wasn't found, you do not have access, or another error occurred. If using an SSH key with a password, please provide the path to the SSH key using the --ssh-key parameter. \n{e}"
+        error_log = f"The repository wasn't found, you do not have access, or another error occurred. If using an SSH key with a password, please provide the path to the SSH key using the --ssh-key parameter. \n{e}"
         progress_bar.stop()
-        handle_failed_package(failed_packages, project_name, error_msg)
+        handle_failed_package(failed_packages, project_name, error_log)
     except subprocess.SubprocessError:
         pass
     except Exception as e:
         console.print()
-        error_msg = f"Error while downloading package - {e}"
+        error_log = f"Error while downloading package - {e}"
         progress_bar.stop()
-        handle_failed_package(failed_packages, project_name, error_msg)
+        handle_failed_package(failed_packages, project_name, error_log)
 
 
 def download_packages(packages: list, protocol: str, key: str = ""):
+    has_warned = False
 
     failed_packages = []
 
@@ -835,22 +1039,27 @@ def download_packages(packages: list, protocol: str, key: str = ""):
     os.mkdir("Sitgrep_Packages")
     os.chdir("Sitgrep_Packages")
 
-    msg.info(f"Downloading {len(packages)} package(s)...")
+    log.info(f"Downloading {len(packages)} package(s)...")
 
     for package in packages:
-
+    
         progress_bar = ProgressBar(target=package["project"])
         clone_repo(failed_packages, package, progress_bar, protocol, key)
 
     if len(failed_packages) == len(packages):
         console.print()
-        msg.error("All packages failed to download.", console, False)
+        log.error("All packages failed to download.", console, False)
 
         for failed_package in failed_packages:
-            msg.error(
-                f'Package {failed_package["package"]}: {failed_package["error"]}',
+            log.error(
+                f"Package {failed_package['package']}: {failed_package['error']}",
                 console,
                 False,
+            )
+
+        if LOCAL_MODE and has_warned:
+            log.warn(
+                "Ensure you have run the following commands:\n\n* mwinit -o\n* kinit\n\n"
             )
 
         sys.exit(1)
@@ -858,20 +1067,39 @@ def download_packages(packages: list, protocol: str, key: str = ""):
     else:
         if len(failed_packages) > 0:
             console.print()
-            msg.error(
+            log.error(
                 "The following packages failed to be downloaded:\n", console, False
             )
             for failed_package in failed_packages:
-                msg.error(
-                    f'Package {failed_package["package"]}: {failed_package["error"]}',
+                log.error(
+                    f"Package {failed_package['package']}: {failed_package['error']}",
                     console,
                     False,
                 )
             console.print()
         else:
-            msg.info(
-                f"Successfully downloaded {len(packages)-len(failed_packages)} package(s)"
+            log.info(
+                f"Successfully downloaded {len(packages) - len(failed_packages)} package(s)"
             )
+
+
+def output_scapper_config(packages):
+    log.info("Scapper package config to copy and paste:")
+    console.print()
+    packages = list(filter(lambda package: package, packages))
+    for i in range(len(packages)):
+        if isinstance(packages[i], dict):
+            if i == len(packages) - 1:
+                console.print(f'"{packages[i]["project"].strip().split("::")[0]}"')
+            else:
+                console.print(f'"{packages[i]["project"].strip().split("::")[0]}",')
+        else:
+            if i == len(packages) - 1:
+                console.print(f'"{packages[i].strip().split("::")[0]}"')
+            else:
+                console.print(f'"{packages[i].strip().split("::")[0]}",')
+
+    console.print()
 
 
 def is_valid_package_name(package: str):
@@ -883,12 +1111,12 @@ def split_packages(packages: list, mode: str):
     split_packages = []
     for package in packages:
         if "https://" in package or "http://" in package:
+     
             if "github.com" in package and mode == "github":
-
                 parsed_github_url = parse_github_url(package)
 
                 if not parsed_github_url or parsed_github_url is None:
-                    msg.error(f"Unable to parse Github URL: {package}", console, True)
+                    log.error(f"Unable to parse Github URL: {package}", console, True)
 
                 split_packages.append(
                     {
@@ -901,11 +1129,10 @@ def split_packages(packages: list, mode: str):
                 )
 
             elif "gitlab.com" in package and mode == "gitlab":
-
                 parsed_gitlab_url = parse_gitlab_url(package)
 
                 if not parsed_gitlab_url or parsed_gitlab_url is None:
-                    msg.error(f"Unable to parse Github URL: {package}", console, True)
+                    log.error(f"Unable to parse Github URL: {package}", console, True)
 
                 split_packages.append(
                     {
@@ -917,14 +1144,14 @@ def split_packages(packages: list, mode: str):
                     }
                 )
             else:
-                msg.error(
+                log.error(
                     "Could not parse URL. Only Github and Gitlab links are currently supported.",
                     console,
                     False,
                 )
-                msg.info("Please report this so this usecase can be added.")
+                log.info("Please report this so this usecase can be added.")
         else:
-            msg.error(f"Unable to parse package: {package}", console)
+            log.error(f"Unable to parse package: {package}", console)
 
     return split_packages
 
@@ -944,11 +1171,11 @@ def get_package_list(packages):
                 packages = ",".join(packages)
                 package_list = packages.split(",")
         except Exception:
-            msg.error("There was an error parsing the package list: ", console, True)
+            log.error("There was an error parsing the package list: ", console, True)
             sys.exit(1)
 
     else:
-        msg.error(
+        log.error(
             f"Unsupported type: Expected a text file or a list of packages, not {type(packages)}",
             console,
             False,
@@ -956,7 +1183,6 @@ def get_package_list(packages):
         sys.exit(1)
 
     return package_list
-
 
 def getFolders(dir):
     directory_items = os.listdir(dir)
@@ -1007,7 +1233,7 @@ def open_dir_in_vscode(dir):
             subprocess.run(["code", "--new-window", dir])
         else:
             raise Exception
-    except:
+    except Exception:
         folder_uri = urlparse(dir)
         vscode_link = f"vscode://file/{folder_uri.path}"
         webbrowser.open(vscode_link)
@@ -1076,11 +1302,9 @@ def print_banner(directory, output_file):
 ┌─────────────────────┐
 │       Sitgrep       │
 │                     │
-│  Powered by Semgrep │
+│ Powered by Opengrep │
 └─────────────────────┘
-""".split(
-                    "\n"
-                )
+""".split("\n")
             ]
         )
         + "\n"
@@ -1088,8 +1312,6 @@ def print_banner(directory, output_file):
     )
 
     banner = "-" * banner_len + "\n" + banner + "\n" + "-" * banner_len
-    start_rgb = (255, 0, 0)  # Red
-    end_rgb = (75, 0, 130)  # Indigo/Violet (can adjust this to any color you want)
 
     # Generate the RGB gradient across the banner length
     gradient = generate_rainbow_gradient(banner_len)
@@ -1118,7 +1340,7 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
             check_path(os.path.expanduser(args.ssh_key))
             has_key = True
         except FileNotFoundError:
-            msg.error(
+            log.error(
                 f"The specified SSH key could not be found: {args.ssh_key}",
                 console,
                 False,
@@ -1131,8 +1353,14 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
             if has_key
             else download_packages(packages, args.protocol)
         )
+        if args.output_scapper_config:
+            output_scapper_config(packages)
         if args.no_scan:
             sys.exit(1)
+    elif LOCAL_MODE and args.output_scapper_config:
+        if len(packages) == 0:
+            packages = get_packages_from_dir(directory)
+        output_scapper_config(packages)
     elif len(packages) > 0 and ALLOW_DOWNLOAD:
         (
             download_packages(packages, args.protocol, args.ssh_key)
@@ -1151,6 +1379,11 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
                 and hasattr(args, "vscode")
             ):
                 open_dir_in_vscode(dir=directory)
+
+            if AGENT_ENABLED:
+                results = agent_analyze(args.model, scan_results, directory, args.agent_endpoint)
+                save_results(results, output_file, directory, packages, AGENTIC=True)
+
         elif "errors" in scan_results and len(scan_results["errors"]) > 0:
             valid_errors = []
             for error in scan_results["errors"]:
@@ -1160,28 +1393,30 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
                 ):
                     valid_errors.append(error)
             if len(valid_errors) > 0:
-                msg.error(
-                    "Semgrep encountered errors and returned no results:",
+                log.error(
+                    "Opengrep encountered errors and returned no results:",
                     console,
                     False,
                 )
-                msg.error(valid_errors, console, False)
+                log.error(valid_errors, console, False)
             else:
-                msg.success("Congrats, there were no findings.")
+                log.success("Congrats, there were no findings.")
         elif len(scan_results["results"]) == 0:
-            msg.success("Congrats, there were no findings.")
+            log.success("Congrats, there were no findings.")
         elif (
             "results" not in scan_results
             and "errors" not in scan_results
             and "paths" not in scan_results
         ):
-            msg.error(
-                "There was an error with Semgrep and the results returned null. Please report this issue.",
+            log.error(
+                "There was an error with Opengrep and the results returned null. Please report this issue.",
                 console,
                 False,
             )
     except Exception:
-        msg.error("There was an error: ", console)
+        if hasattr(args, "agent"):
+            agent.SitgrepAgent(args.model).kill_ollama()
+        log.error("There was an error: ", console)
 
 
 def main(args):
@@ -1202,9 +1437,12 @@ def main(args):
     ALLOW_DOWNLOAD = False
     global OUTPUT_FOLDER
 
+    global AGENT_ENABLED
+    AGENT_ENABLED = args.agent
+
     packages = []
     output_file = args.output
-    if str(args.output).strip() == "" or args.output == None:
+    if str(args.output).strip() == "" or args.output is None:
         output_file = f"sitgrep-{TIMESTR}"
         OUTPUT_FOLDER = os.path.join(START_DIR, "sitgrep-report", f"sitgrep-{TIMESTR}")
     else:
@@ -1232,13 +1470,13 @@ def main(args):
                 )
                 sys.exit(0)
             else:
-                msg.error(
+                log.error(
                     f"The JSON could not be found at the given path: {expanded_filepath}",
                     console,
                     False,
                 )
         except Exception:
-            msg.error("There was an error loading the JSON file: ", console)
+            log.error("There was an error loading the JSON file: ", console)
             sys.exit(1)
     elif args.subcommands == "local":
         LOCAL_MODE = True
@@ -1251,7 +1489,7 @@ def main(args):
         else:
             jar_file_path = os.path.join(START_DIR, args.jar_file)
         if not os.path.isfile(jar_file_path):
-            msg.error(f"The JAR file {jar_file_path} does not exist.", console)
+            log.error(f"The JAR file {jar_file_path} does not exist.", console)
             sys.exit(1)
 
         if not ensure_program_installed("java"):
@@ -1287,6 +1525,7 @@ def main(args):
             github_packages: list = []
             gitlab_packages: list = []
 
+       
             if (
                 hasattr(args, "github")
                 and isinstance(args.github, list)
@@ -1321,15 +1560,18 @@ def main(args):
             if not os.path.isdir(directory) and not os.path.isfile(directory):
                 raise (FileNotFoundError)
     except FileNotFoundError:
-        msg.error(
+        log.error(
             f"The directory specified could not be found: {directory}", console, False
         )
         sys.exit(1)
-    except Exception as e:
-        if hasattr(args, "github") or hasattr(args, "gitlab"):
-            msg.error(f"There was an error gathering package data: ", console, True)
+    except Exception:
+        if (
+            hasattr(args, "github")
+            or hasattr(args, "gitlab")
+        ):
+            log.error("There was an error gathering package data: ", console)
         else:
-            msg.error(
+            log.error(
                 "There was an error parsing the directory of the package: ",
                 console,
             )
@@ -1355,7 +1597,7 @@ def cli():
     update_parser.add_argument("--url", required=True, help="URL of the source")
     update_parser.add_argument(
         "--categories",
-        type=validate_choices,
+        type=validate_mode,
         required=True,
         help=f"Categories of the source. Valid categories: {MODES}",
     )
@@ -1376,9 +1618,20 @@ def cli():
     fetch_parser = sources_subparsers.add_parser("fetch", help="Fetch all rule sources")
     fetch_parser.set_defaults(func=source_handler.fetch_sources)
 
+    export_parser = sources_subparsers.add_parser(
+        "export", help="Export rules to ZIP file"
+    )
+    export_parser.add_argument(
+        "--output",
+        required=False,
+        default=os.getcwd(),
+        help="Location to output zip file",
+    )
+    export_parser.set_defaults(func=source_handler.export_rules)
+
     local_parser = subparsers.add_parser(
         "local",
-        help="Use local rules instead of official Semgrep rules. Run 'sitgrep local -h' for more info.",
+        help="Use local rules instead of official Opengrep rules. Run 'sitgrep local -h' for more info.",
     )
     local_parser.add_argument(
         "-d",
@@ -1405,7 +1658,30 @@ def cli():
         "-N",
         "--no-scan",
         action="store_true",
-        help="Only download the packages, do not scan them. (default=False)",
+        help="Only download packages, do not scan them. (default=False)",
+    )
+    local_parser.add_argument(
+        "-ai",
+        "--agent",
+        required=False,
+        action="store_true",
+        help="Enable AI agent to review output.",
+    )
+    local_parser.add_argument(
+        "-l",
+        "--model",
+        required=False,
+        choices=model.OllamaModel.toList(),
+        default=model.OllamaModel.QWEN3_14B,
+        type=model.OllamaModel,
+        help=f"Specify mode. Valid modes: {model.OllamaModel.toList()}",
+    )
+    local_parser.add_argument(
+        "-s",
+        "--output-scapper-config",
+        action="store_true",
+        help="Outputs scapper config for packages (default=False)",
+        default=False,
     )
     local_parser.add_argument(
         "-v",
@@ -1419,7 +1695,7 @@ def cli():
         "--json-input",
         type=str,
         required=False,
-        help="Load a Semgrep JSON output file",
+        help="Load a Opengrep JSON output file",
     )
     local_parser.add_argument(
         "-n",
@@ -1472,7 +1748,15 @@ def cli():
         "--ssh-key",
         required=False,
         type=str,
-        help=f"Specify SSH key to use.",
+        help="Specify SSH key to use.",
+    )
+    local_parser.add_argument(
+        "-ae",
+        "--agent-endpoint",
+        required=False,
+        type=str,
+        help="URL to the agent endpoint",
+        default="",
     )
 
     local_parser.add_argument(
@@ -1501,7 +1785,23 @@ def cli():
         "--ssh-key",
         required=False,
         type=str,
-        help=f"Specify SSH key to use.",
+        help="Specify SSH key to use.",
+    )
+    parser.add_argument(
+        "-ai",
+        "--agent",
+        required=False,
+        action="store_true",
+        help="Enable AI agent to review output.",
+    )
+    parser.add_argument(
+        "-l",
+        "--model",
+        required=False,
+        choices=model.OllamaModel,
+        default=model.OllamaModel.QWEN3_14B,
+        type=model.OllamaModel,
+        help=f"Specify mode. Valid modes: {model.OllamaModel.toList()}",
     )
     parser.add_argument(
         "-c",
@@ -1516,6 +1816,14 @@ def cli():
         required=False,
         type=str,
         help="Specify full path to JAR.",
+    )
+    parser.add_argument(
+        "-ae",
+        "--agent-endpoint",
+        required=False,
+        type=str,
+        help="URL to the agent endpoint",
+        default="",
     )
     parser.add_argument(
         "-d",
@@ -1550,7 +1858,7 @@ def cli():
         "--json-input",
         type=str,
         required=False,
-        help="Load a Semgrep JSON output file",
+        help="Load a Opengrep JSON output file",
     )
     parser.add_argument(
         "-n",
@@ -1573,6 +1881,7 @@ def cli():
         nargs="+",
         help="Specify Gitlab packages in a text file to download. Accepts Gitlab links.",
     )
+
     parser.add_argument(
         "-vs", "--vscode", action="store_true", help="Open the folder in VSCode"
     )
@@ -1584,21 +1893,29 @@ def cli():
         main(args)
     except KeyboardInterrupt:
         console.print("\r\n", end="\r")
-        msg.warn("Detected keyboard interrupt. Exiting...")
+        if hasattr(args, "agent"):
+            agent.SitgrepAgent(args.model).kill_ollama()
+        log.warn("Detected keyboard interrupt. Exiting...")
     except MemoryError:
-        msg.error(
+        if hasattr(args, "agent"):
+            agent.SitgrepAgent(args.model).kill_ollama()
+        log.error(
             "Ran out of memory. Please report this package for further investigation.",
             console,
             False,
         )
         sys.exit(2)
     except FileNotFoundError:
-        msg.error(
+        if hasattr(args, "agent"):
+            agent.SitgrepAgent(args.model).kill_ollama()
+        log.error(
             f"The directory specified could not be found: {args.directory}",
             console,
             True,
         )
         sys.exit(3)
     except Exception:
+        if hasattr(args, "agent"):
+            agent.SitgrepAgent(args.model).kill_ollama()
         console.print()
-        msg.error("An unknown exception occured", console, True)
+        log.error("An unknown exception occured", console, True)

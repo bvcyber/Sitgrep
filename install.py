@@ -7,13 +7,12 @@ import shutil
 import subprocess
 import getpass
 import argparse
-from argparse import HelpFormatter
-from rich.console import Console
 from rich_argparse import RichHelpFormatter
+from rich.console import Console
 
 console = Console(color_system="truecolor")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-from src.utils import messages as msg
+from utils import logging as msg
 
 
 def get_user_home():
@@ -81,6 +80,19 @@ def run(*args, **kwargs):
 def install(args: argparse.Namespace):
 
     try:
+        info("Installing Opengrep")
+        if get_os() != "nt":
+            subprocess.run(
+                "curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash",
+                shell=True,
+                check=True,
+            )
+        else:
+            subprocess.run(
+                "irm https://raw.githubusercontent.com/opengrep/opengrep/main/install.ps1 | iex",
+                shell=True,
+                check=True,
+            )
         run(["python3", "-m", "pip", "install", "--upgrade", "pip"])
 
         install = None
@@ -119,7 +131,7 @@ def install(args: argparse.Namespace):
 
     success("Installation successful")
     print()
-    warn("Run 'sitgrep sources fetch' to download rules to use locally")
+    info("Run 'sitgrep sources fetch' to download rules to use locally")
 
     console.print("\nFor usage details, read README.md or run the following command:\n")
     console.print("sitgrep --help")
@@ -156,10 +168,6 @@ def setup():
 def prechecks():
 
     try:
-        if get_os() == "nt":
-            warn("Please use the Docker image when using Sitgrep on Windows.")
-            sys.exit(1)
-
         if is_user_admin():
             error(
                 "Root user detected. Please run this script as your user, not sudo/root/admin."
