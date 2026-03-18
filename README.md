@@ -80,14 +80,13 @@ python3 -m pip uninstall sitgrep
 
 # Usage
 ```
-sitgrep {local,sources} [-h] [-c CONTEXT] [-d DIRECTORY] [-o OUTPUT] [-n Download_Only] [-s Output_Scapper_Config]
+sitgrep {local,sources} [-h] [-c CONTEXT] [-d DIRECTORY] [-o OUTPUT] [-n Download_Only] 
 
 Example: sitgrep -c 2 -d ~/my/dir/ -o output_file 
 
 positional arguments:
   local                           Enable local mode
     -N, --no-scan                 Only download the packages, do not scan them. (default=False)
-    -s, --output-scapper-config   Output a scapper config-compatible list of packages. (default=False)
 
   sources             Manage sources
     add                 Add a source

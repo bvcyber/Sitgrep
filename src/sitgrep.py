@@ -1083,25 +1083,6 @@ def download_packages(packages: list, protocol: str, key: str = ""):
             )
 
 
-def output_scapper_config(packages):
-    log.info("Scapper package config to copy and paste:")
-    console.print()
-    packages = list(filter(lambda package: package, packages))
-    for i in range(len(packages)):
-        if isinstance(packages[i], dict):
-            if i == len(packages) - 1:
-                console.print(f'"{packages[i]["project"].strip().split("::")[0]}"')
-            else:
-                console.print(f'"{packages[i]["project"].strip().split("::")[0]}",')
-        else:
-            if i == len(packages) - 1:
-                console.print(f'"{packages[i].strip().split("::")[0]}"')
-            else:
-                console.print(f'"{packages[i].strip().split("::")[0]}",')
-
-    console.print()
-
-
 def is_valid_package_name(package: str):
     pattern = r"^[a-zA-Z0-9-_/.]+(::[a-zA-Z0-9-_/.]+)?$"
     return bool(re.match(pattern, package.strip()))
@@ -1353,14 +1334,13 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
             if has_key
             else download_packages(packages, args.protocol)
         )
-        if args.output_scapper_config:
-            output_scapper_config(packages)
+   
         if args.no_scan:
             sys.exit(1)
-    elif LOCAL_MODE and args.output_scapper_config:
+    elif LOCAL_MODE:
         if len(packages) == 0:
             packages = get_packages_from_dir(directory)
-        output_scapper_config(packages)
+    
     elif len(packages) > 0 and ALLOW_DOWNLOAD:
         (
             download_packages(packages, args.protocol, args.ssh_key)
@@ -1675,13 +1655,6 @@ def cli():
         default=model.OllamaModel.QWEN3_14B,
         type=model.OllamaModel,
         help=f"Specify mode. Valid modes: {model.OllamaModel.toList()}",
-    )
-    local_parser.add_argument(
-        "-s",
-        "--output-scapper-config",
-        action="store_true",
-        help="Outputs scapper config for packages (default=False)",
-        default=False,
     )
     local_parser.add_argument(
         "-v",
