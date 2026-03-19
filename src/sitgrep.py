@@ -480,7 +480,7 @@ def process_json(results, dir, packages, AGENTIC=False) -> dict:
                 file_path_parts = file.split(os.sep)
 
                 if os.path.isfile(dir):
-                    file_path = os.sep.join(file_path_parts[-2:])
+                    file_path = file_path_parts[-1]
                 else:
                     base_dir = dir.split(os.sep)[-1]
                     base_index = file_path_parts.index(base_dir)
