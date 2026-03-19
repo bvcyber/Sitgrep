@@ -43,7 +43,7 @@ from utils.source_handler import SourceHandler
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
-VERSION = "3.8.0"
+VERSION = "3.8.1"
 TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"
