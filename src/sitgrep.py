@@ -497,7 +497,7 @@ def process_json(results, dir, packages, AGENTIC=False) -> dict:
 
                 finding = {
                     "id": id,
-                    "file": new_file_path,
+                    "file": file_path,
                     "package": package_name,
                     "context": context,
                     "end": result["end"]["line"],
