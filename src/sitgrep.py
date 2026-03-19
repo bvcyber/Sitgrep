@@ -476,9 +476,18 @@ def process_json(results, dir, packages, AGENTIC=False) -> dict:
 
                 rule_index = get_rule_index(json_results["results"], rule_id)
 
-                new_file_path = f"{file.replace(os.path.abspath(dir), '')}"
-                if new_file_path.startswith("/"):
-                    new_file_path = new_file_path[1:]
+                file_path = file
+                file_path_parts = file.split(os.sep)
+
+                if os.path.isfile(dir):
+                    file_path = os.sep.join(file_path_parts[-2:])
+                else:
+                    base_dir = dir.split(os.sep)[-1]
+                    base_index = file_path_parts.index(base_dir)
+                    file_path = os.sep.join(file_path_parts[base_index:])
+
+                if file_path.startswith(os.sep):
+                    file_path = file_path[1:]
 
                 id = (
                     f"{groupIndex}::{0}"
