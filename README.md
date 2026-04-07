@@ -106,7 +106,7 @@ optional arguments:
   -V, --version       Print Sitgrep's version
   -v, --verbose       Increase verbosity level (default 0, max of 3)
   -j, --json-input    Load a Opengrep JSON output file
-  -n, --no-auto-open Disable auto-opening the results in the browser
+  -n, --no-open Disable auto-opening the results in the browser
   -gh, --github       Provide a list of Github repositories to download and scan. Overrides the directory parameter (-d)
   -gl, --gitlab       Provide a list of Gitlab repositories to download and scan. Overrides the directory parameter (-d)
   -jf, --jar_file     Provide the path to a JAR file. The file will be decompiled and resulting source code scanned. Relative and absolute paths are supported.
