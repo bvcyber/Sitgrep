@@ -714,7 +714,7 @@ def agent_analyze(
 
                     state["done"] = engineer_output.get("done", False)
 
-                    if state["done"] or state["iteration"] > 2:
+                    if state["done"] or state["iteration"] > LIMIT:
                         judge_result: BaseModel = get_ai_message(
                             agent.send(
                                 AgentType.JUDGE,
