@@ -1435,7 +1435,7 @@ def main(args):
     LOCAL_MODE = False
 
     global NO_OPEN
-    NO_OPEN = args.no_auto_open
+    NO_OPEN = args.no_open
 
     ALLOW_DOWNLOAD = False
     global OUTPUT_FOLDER
@@ -1685,7 +1685,7 @@ def cli():
     )
     local_parser.add_argument(
         "-n",
-        "--no-auto-open",
+        "--no-open",
         action="store_true",
         required=False,
         help="Disable auto-opening the results in the browser",
@@ -1848,7 +1848,7 @@ def cli():
     )
     parser.add_argument(
         "-n",
-        "--no-auto-open",
+        "--no-open",
         action="store_true",
         required=False,
         help="Disable auto-opening the results in the browser",
