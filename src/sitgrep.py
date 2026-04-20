@@ -43,7 +43,7 @@ from utils.source_handler import SourceHandler
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
-VERSION = "3.8.1"
+VERSION = "3.8.2"
 TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"
@@ -227,7 +227,7 @@ def scan(dir: str, mode: str, output_file: str):
     check_path(dir)
     try:
         process = subprocess.Popen(
-            ["semgrep", "--version"],
+            ["opengrep", "--version"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -1197,11 +1197,14 @@ def getFolders(dir):
 
 
 def get_packages_from_dir(dir):
-    folders = getFolders(dir)
-    packages = []
-    os.chdir(dir)
-
     foundConfig = False
+    packages = []
+
+    if os.path.isfile(dir):
+        return packages
+    
+    folders = getFolders(dir)
+    os.chdir(dir)
 
     if os.path.isfile("sitgrep-config.json"):
         config = json.loads(open("sitgrep-config.json", "r").read())
