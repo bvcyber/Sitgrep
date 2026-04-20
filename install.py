@@ -132,6 +132,10 @@ def install(args: argparse.Namespace):
     success("Installation successful")
     print()
     info("Run 'sitgrep sources fetch' to download rules to use locally")
+    info("If `sitgrep` is not found, add the following line to your shell profile (.bashrc, .zshrc, etc):")
+    info('echo \"export PATH=\"`python3 -m site --user-base`/bin:\$PATH')
+    info("Then run:")
+    info("source ~/.zprofile")
 
     console.print("\nFor usage details, read README.md or run the following command:\n")
     console.print("sitgrep --help")

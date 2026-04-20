@@ -303,7 +303,7 @@ class SitgrepAgent:
                     # log.info(f"Agent timed out. Restarting agent and retrying ({attempt}/{MAX_RETIRES})...")
                     self.restart(True)
                     self.send(type, message)
-        log.warn("Failed to get agent response after 3 attempts... continuing...")
+        log.warn("Failed to get agent response after 3 attempts... continuing...", True)
         return {"messages": []}
 
     def add_tool(self, tool: BaseTool):
