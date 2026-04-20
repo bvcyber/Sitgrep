@@ -1763,7 +1763,7 @@ def cli():
         required=False,
         choices=MODES,
         default="GENERAL",
-        type=str,
+        type=str.upper,
         help=f"Specify mode. Valid modes: {MODES}",
     )
     parser.add_argument(
