@@ -60,5 +60,8 @@ def progress(msg):
     console.print(f"[{time()}][[cyan]INFO[/]] {msg}", end="\r")
 
 
-def warn(msg):
-    console.print(f"\n[{time()}][[yellow]WARN[/]] {msg}")
+def warn(msg, newline = False):
+    if newline:
+        console.print(f"\n[{time()}][[yellow]WARN[/]] {msg}")
+    else:
+        console.print(f"[{time()}][[yellow]WARN[/]] {msg}")
