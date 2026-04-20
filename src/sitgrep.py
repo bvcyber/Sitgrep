@@ -262,7 +262,6 @@ def scan(dir: str, mode: str, output_file: str):
         if not LOCAL_MODE:
             cmd.extend(["--config", "auto"])
 
-        log.debug(configs)
         for config in configs:
             config_path = os.path.join(INSTALL_DIR, "rules", config["id"])
             if os.path.isdir(config_path) or os.path.isfile(config_path):
