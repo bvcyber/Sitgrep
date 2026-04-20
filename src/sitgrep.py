@@ -1211,22 +1211,28 @@ def get_packages_from_dir(dir):
         packages.append(config)
         foundConfig = True
 
+
     for folder in folders:
         os.chdir(folder)
-        if not foundConfig and os.path.isfile("sitgrep-config.json"):
+        if os.path.isfile("sitgrep-config.json"):
             config = json.loads(open("sitgrep-config.json", "r").read())
             packages.append(config)
-        elif not foundConfig:
-            packages.append(
-                {
-                    "path": dir,
-                    "project": folder,
-                    "branch": "",
-                    "site": "unknown",
-                    "user": None,
-                }
-            )
+            foundConfig = True
         os.chdir("../")
+
+    target = dir.split(os.sep)[-1]
+
+    if not foundConfig:
+        packages.append(
+            {
+                "path": dir,
+                "project": target,
+                "branch": "",
+                "site": "unknown",
+                "user": None,
+            }
+        )
+
     os.chdir("../")
     return packages
 
@@ -1720,7 +1726,7 @@ def cli():
         required=False,
         choices=MODES,
         default="GENERAL",
-        type=str,
+        type=str.upper,
         help=f"Specify mode. Valid modes: {MODES}",
     )
     local_parser.add_argument(
@@ -1757,7 +1763,7 @@ def cli():
         required=False,
         choices=MODES,
         default="GENERAL",
-        type=str,
+        type=str.upper,
         help=f"Specify mode. Valid modes: {MODES}",
     )
     parser.add_argument(
