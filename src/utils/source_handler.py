@@ -60,10 +60,6 @@ def rgb_to_hex(rgb):
     return "#{:02X}{:02X}{:02X}".format(rgb[0], rgb[1], rgb[2])
 
 
-def src_json(src):
-    return {"sources": src}
-
-
 def get_sources(path=SOURCES_PATH) -> list:
 
     try:
@@ -99,7 +95,7 @@ class SourceHandler:
         sources.append(new_src)
 
         with open(SOURCES_PATH, "w") as f:
-            json.dump(src_json(sources), f, indent=2)
+            json.dump(sources, f, indent=2)
 
         sys.exit(0)
 
@@ -114,7 +110,7 @@ class SourceHandler:
                 break
 
         with open(SOURCES_PATH, "w") as f:
-            json.dump(src_json(sources), f, indent=2)
+            json.dump(sources, f, indent=2)
 
         sys.exit(0)
 
@@ -122,7 +118,7 @@ class SourceHandler:
         log.info(f"Restoring original sources")
         sources = get_sources(SOURCES_BAK_PATH)
         with open(SOURCES_PATH, "w") as f:
-            json.dump(src_json(sources), f, indent=2)
+            json.dump(sources, f, indent=2)
 
         sys.exit(0)
 
@@ -163,7 +159,7 @@ class SourceHandler:
             for category in source["categories"]:
                 if str(category).lower() == str(type).lower():
                     refined_sources.append(source)
-        return src_json(refined_sources)
+        return refined_sources
 
     def exclude_folders(self, directory, excluded_folders):
         """Excludes specific folders from a directory."""
