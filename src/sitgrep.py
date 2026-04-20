@@ -238,8 +238,8 @@ def scan(dir: str, mode: str, output_file: str):
         sys.exit(1)
 
     try:
-        source_dict: dict = SourceHandler().get_sources_by_type(mode)
-        configs = source_dict["sources"]
+        sources: dict = SourceHandler().get_sources_by_type(mode)
+        configs = sources
         cmd = [
             "opengrep",
             "scan",
