@@ -390,7 +390,7 @@ class SitgrepAgent:
                     output = subprocess.run(
                         ["ollama", "pull", self.model], stdout=subprocess.PIPE, text=True
                     )
-                    if hasattr(output, "stderr") and "requires a newer version of Ollama" in output.stderr:
+                    if output and hasattr(output, "stderr") and "requires a newer version of Ollama" in output.stderr:
                         log.error(
                             f"Ollama returned the following error: {output.stderr}",
                             console,
