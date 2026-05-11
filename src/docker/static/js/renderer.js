@@ -21,33 +21,33 @@ function render() {
     let sortedFindings, filteredFindings;
     let page = sessionStorage.getItem("page");
 
-    if (page == "trash") {
-        pageContents = deletedFindings;
-        document.getElementById('opts').style.display = "block";
-        document.getElementById("trash-nav").style.color = "#0094d4";
-        document.getElementById("dashboard-nav").style.color = "white";
-        document.getElementById("findings-nav").style.color = "white";
+    if (page == "trash" || page == "findings") {
+        if (page == "trash"){
+            pageContents = deletedFindings;
+            document.getElementById('opts').style.display = "block";
+            document.getElementById("trash-nav").style.color = "#0094d4";
+            document.getElementById("dashboard-nav").style.color = "white";
+            document.getElementById("findings-nav").style.color = "white";
+        }  
+        else {
+            pageContents = activeFindings;
+            document.getElementById('opts').style.display = "block";
+            document.getElementById("trash-nav").style.color = "white";
+            document.getElementById("dashboard-nav").style.color = "white";
+            document.getElementById("findings-nav").style.color = "#0094d4";
+        }    
         filteredFindings = getFilteredFindings(pageContents);
         sortedFindings = sortFindings(filteredFindings);
         pageContents = getPaginatedFindings(sortedFindings);
     }
-    else if (page == "dashboard") {
+    else {
         scrollPosition = 0;
         document.getElementById('opts').style.display = "none";
         document.getElementById("trash-nav").style.color = "white";
         document.getElementById("dashboard-nav").style.color = "#0094d4";
         document.getElementById("findings-nav").style.color = "white";
     }
-    else if (page == "findings") {
-        pageContents = activeFindings;
-        document.getElementById('opts').style.display = "block";
-        document.getElementById("trash-nav").style.color = "white";
-        document.getElementById("dashboard-nav").style.color = "white";
-        document.getElementById("findings-nav").style.color = "#0094d4";
-        filteredFindings = getFilteredFindings(pageContents);
-        sortedFindings = sortFindings(filteredFindings);
-        pageContents = getPaginatedFindings(sortedFindings);
-    }
+
 
     let cap = page.toLocaleLowerCase().split('');
     cap[0] = cap[0].toUpperCase();

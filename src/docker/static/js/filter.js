@@ -137,7 +137,7 @@ function loadRuleFilter(rule) {
         newDiv.textContent = rule;
         selectFilter.appendChild(newDiv);
     });
-    if (rule){
+    if (rule) {
         selectFilter.selectedIndex = rules.indexOf(rule) + 1;
     }
 }
@@ -163,7 +163,7 @@ function loadPackageFilter(package) {
             newDiv.textContent = package;
             selectFilter.appendChild(newDiv);
         });
-        if (package){
+        if (package) {
             selectFilter.selectedIndex = packages.indexOf(package) + 1;
         }
     }
@@ -172,7 +172,7 @@ function loadPackageFilter(package) {
 
 function getFilteredFindings(data) {
     let filters = getToken().filters;
-    let filteredGroups = data.filter(function (group) {
+    let filteredFindings = data.filter(function (group) {
         for (var key in filters) {
             // Filters OWASPs
             if (filters[key].length > 0 && Array.isArray(group[key])) {
@@ -183,7 +183,7 @@ function getFilteredFindings(data) {
                 })) {
                     return false;
                 }
-            } 
+            }
             // Filters Rules
             else if (filters[key].length > 0 && group[key] !== undefined && !filters[key].includes(sha256(group[key]))) {
                 return false;
@@ -196,22 +196,11 @@ function getFilteredFindings(data) {
 
 
     // Filters packages
-    if (filters.package.length > 0) {
-        for (var i = 0; i < filteredGroups.length; i++) {
-            let group = filteredGroups[i];
-            group.findings = group.findings.filter(finding =>
-                sha256(finding.package) === filters.package[0]
-            )
-        }
-        // Remove empty groups if no findings have matching packages
-        filteredGroups = filteredGroups.filter(function (group) {
-            if (group.findings.length == 0) {
-                return false;
-            }
-            return true;
-        });
-    }
-    return filteredGroups
+    filteredGroups = filteredFindings.filter(finding =>
+        sha256(finding.package) === filters.package[0]
+    );
+
+    return filteredFindings
 }
 
 function applyRuleFilter(rule) {

@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -39,6 +40,7 @@ from utils import logging as log
 from utils.archive_handler import extract_if_archive
 from utils.progressbar import ProgressBar
 from utils.source_handler import SourceHandler
+import uuid
 
 install(show_locals=True)
 console = Console(color_system="truecolor")
@@ -473,9 +475,6 @@ def process_json(results, dir, packages, AGENTIC=False) -> dict:
                 rule_id = rule_id.removeprefix(".")
                 rule_parts = rule_id.split(".")
                 rule_id = f"{rule_parts[0]}.{rule_parts[-1]}"
-
-                rule_index = get_rule_index(json_results["results"], rule_id)
-
                 file_path = file
                 file_path_parts = file.split(os.sep)
 
@@ -489,14 +488,7 @@ def process_json(results, dir, packages, AGENTIC=False) -> dict:
                 if file_path.startswith(os.sep):
                     file_path = file_path[1:]
 
-                id = (
-                    f"{groupIndex}::{0}"
-                    if rule_index == -1
-                    else f"{json_results['results'][rule_index]['id']}::{len(json_results['results'][rule_index]['findings'])}"
-                )
-
                 finding = {
-                    "id": id,
                     "file": file_path,
                     "package": package_name,
                     "context": context,
@@ -508,25 +500,21 @@ def process_json(results, dir, packages, AGENTIC=False) -> dict:
 
                 if AGENTIC:
                     finding["agent_review"] = result.get("agent_review", "")
-
-                if rule_index == -1:
-                    json_results["results"].append(
-                        {
-                            "id": str(groupIndex),
-                            "rule_id": rule_id,
-                            "cwe": result["extra"]["metadata"]["cwe"],
-                            "description": result["extra"]["message"],
-                            "impact": result["extra"]["metadata"]["impact"],
-                            "likelihood": result["extra"]["metadata"]["likelihood"],
-                            "owasp": result["extra"]["metadata"]["owasp"],
-                            "confidence": result["extra"]["metadata"]["confidence"],
-                            "findings": [finding],
-                        }
-                    )
-                    groupIndex += 1
-                else:
-                    json_results["results"][rule_index]["findings"].append(finding)
-
+               
+                json_results["results"].append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "rule_id": rule_id,
+                        "cwe": result["extra"]["metadata"]["cwe"],
+                        "description": result["extra"]["message"],
+                        "impact": result["extra"]["metadata"]["impact"],
+                        "likelihood": result["extra"]["metadata"]["likelihood"],
+                        "owasp": result["extra"]["metadata"]["owasp"],
+                        "confidence": result["extra"]["metadata"]["confidence"],
+                        "finding": finding,
+                    }
+                )
+                 
         return json_results
     except KeyError:
         log.error("The following key could not be found while parsing JSON", console)
@@ -544,7 +532,7 @@ def get_rule_index(results: list, rule_id):
 
 
 def count_findings(results):
-    return sum(len(rule["findings"]) for rule in results["results"])
+    return len(results["results"])
 
 
 def save_results(scan_results: dict, output_file, dir="", packages=[], AGENTIC=False):
