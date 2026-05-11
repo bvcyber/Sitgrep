@@ -5,29 +5,11 @@ function seperateFindings(results) {
 
     for (var dFinding of token.deleted) {
 
-        let groupIndex = parseInt(dFinding.split('::')[0]);
-        let realGroupIndex = getIndexById(groupIndex, results);
-        let realFindingIndex = getIndexById(dFinding, results[realGroupIndex].findings)
-
-        if (realFindingIndex > -1 && realGroupIndex > -1) {
-            let finding = results[realGroupIndex].findings[realFindingIndex];
-            let deletedGroupIndex = getIndexById(groupIndex, deletedFindings);
-
-            if (deletedGroupIndex > -1) {
-                deletedFindings[deletedGroupIndex].findings.push(finding)
-            }
-            else {
-                let tempGroup = structuredClone(results[realGroupIndex]);
-                tempGroup.findings = [];
-                tempGroup.findings.push(structuredClone(results[realGroupIndex].findings[realFindingIndex]));
-                deletedFindings.push(tempGroup);
-            }
-            results[realGroupIndex].findings.splice(realFindingIndex, 1);
-            if (results[realGroupIndex].findings.length == 0) {
-                results.splice(realGroupIndex, 1);
-            }
-        }
-        else {
+        const finding = results.find(result => result.id === dFinding);
+        deletedFindings.push(finding)
+        const index = results.findIndex(result => finding.id)
+        if (index > -1) {
+            results.splice(index, 1);
         }
     }
 
