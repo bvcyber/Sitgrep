@@ -1,15 +1,15 @@
-function restoreRuleGroup(ruleGroupId) {
+function restoreRule(ruleGroupId) {
     scrollPosition = getScrollPosition();
     const resultsCopy = structuredClone(RESULTS);
-    ruleGroupId = parseInt(ruleGroupId);
-    let groupIndex = getIndexById(ruleGroupId, resultsCopy);
-    let group = resultsCopy[groupIndex];
+    let group = getFindingsByRuleId(ruleGroupId.split(":").pop(), resultsCopy);
     let token = getToken();
-    for (var i = 0; i < group.findings.length; i++) {
-        let finding = group.findings[i];
+    for (var i = 0; i < group.length; i++) {
+        let finding = group[i];
         let tokenIndex = token.deleted.indexOf(finding.id);
-        token.deleted.splice(tokenIndex, 1);
-        setToken(token);
+        if (tokenIndex > -1) {
+            token.deleted.splice(tokenIndex, 1);
+            setToken(token);
+        }
     }
 
     let groupElement = document.getElementById(ruleGroupId);
@@ -24,16 +24,17 @@ function restoreRuleGroup(ruleGroupId) {
     render(); 
 }
 
-function restoreContext(contextID) {
+function restoreContext(contextID, ruleID) {
     scrollPosition = getScrollPosition();
     let token = getToken();
     let tokenIndex = token.deleted.indexOf(contextID);
     token.deleted.splice(tokenIndex, 1);
     setToken(token);
-    let contextElement = document.getElementById(contextID.toString());
+    let contextElement = document.getElementById(contextID);
     contextElement.remove();
 
-    let groupElement = document.getElementById(contextID.split("::")[0].toString());
+    console.log(ruleID);
+    let groupElement = document.getElementById(ruleID);
     if (groupElement.querySelectorAll(".context").length <= 0){
         groupElement.remove(); 
     }

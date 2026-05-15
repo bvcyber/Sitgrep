@@ -7,12 +7,12 @@ function seperateFindings(results) {
 
         const finding = results.find(result => result.id === dFinding);
         deletedFindings.push(finding)
-        const index = results.findIndex(result => finding.id)
+        const index = results.findIndex(result => result.id === finding.id)
         if (index > -1) {
             results.splice(index, 1);
         }
     }
-
+    console.log(results)
     return [results, deletedFindings]
 }
 

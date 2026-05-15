@@ -196,8 +196,8 @@ function getFilteredFindings(data) {
 
 
     // Filters packages
-    filteredGroups = filteredFindings.filter(finding =>
-        sha256(finding.package) === filters.package[0]
+    filteredGroups = filteredFindings.filter(findingObject =>
+        sha256(findingObject.finding.package) === filters.package[0]
     );
 
     return filteredFindings
