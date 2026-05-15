@@ -29,7 +29,9 @@ function exportToJson() {
         if (findingObject.finding.start != findingObject.finding.end){
             line = `${findingObject.finding.start}-${findingObject.finding.end}`
         }
-        findingObject.finding.line = line;
+        finding.line = line;
+        finding.file = findingObject.finding.file;
+        finding.context = findingObject.finding.context;
 
         json.results.push(finding)
     });
