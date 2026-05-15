@@ -5,7 +5,7 @@ function countFindings(results) {
 function getFindingsByRuleId(ruleId) {
   let findings = [];
   sitgrepResults.forEach(finding => {
-    if (finding.rule_id === ruleId) {
+    if (finding.rule_id === ruleId || finding.id === ruleId) {
       findings.push(finding);
     }
   });
