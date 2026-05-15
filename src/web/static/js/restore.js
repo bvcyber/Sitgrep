@@ -33,7 +33,6 @@ function restoreContext(contextID, ruleID) {
     let contextElement = document.getElementById(contextID);
     contextElement.remove();
 
-    console.log(ruleID);
     let groupElement = document.getElementById(ruleID);
     if (groupElement.querySelectorAll(".context").length <= 0){
         groupElement.remove(); 
