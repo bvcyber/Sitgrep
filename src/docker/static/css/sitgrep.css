@@ -18,6 +18,11 @@ h3 {
 
 }
 
+.view-select {
+  padding: 3px;
+}
+
+
 .ai_thought {
   cursor: pointer;
 }
