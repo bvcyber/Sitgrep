@@ -25,6 +25,12 @@ window.addEventListener("DOMContentLoaded", (event) => {
         
     });
 
+    const viewSelectElement = document.getElementById('viewSelect');
+    viewSelectElement.addEventListener('change', () => {
+        sessionStorage.setItem("grouped", viewSelectElement.value == "grouped" ? "true" : "false");
+        render();  
+    });
+
     document.getElementById('main-content').onscroll = function() {
         if (document.getElementById('main-content').scrollTop > 1000) {
             document.getElementById('scroll-to-top').style.display = 'block';
