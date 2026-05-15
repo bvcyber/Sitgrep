@@ -22,6 +22,11 @@ h3 {
   cursor: pointer;
 }
 
+.view-select {
+  padding: 3px;
+}
+
+
 .ai-review {
   padding: 5px;
   border: #363535 1px solid;
