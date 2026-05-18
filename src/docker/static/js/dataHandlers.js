@@ -12,7 +12,6 @@ function seperateFindings(results) {
             results.splice(index, 1);
         }
     }
-    console.log(results)
     return [results, deletedFindings]
 }
 
