@@ -20,7 +20,7 @@ function render() {
     let deletedFindings = seperatedFindings[1];
     let sortedFindings, filteredFindings;
     let page = sessionStorage.getItem("page");
-    let grouped = sessionStorage.getItem("grouped") === "true" ? true : false;
+    let grouped = sessionStorage.getItem("grouped") === "true" || null ? true : false;
 
     if (page == "trash" || page == "findings") {
         if (page == "trash") {
