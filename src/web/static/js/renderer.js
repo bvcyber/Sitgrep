@@ -112,7 +112,7 @@ function buildAllFindings(main, totalCurrentFindings, paginatedFindings, grouped
             var ruleHeader = document.getElementById(groupID);
 
             if (grouped && ruleHeader === null || !grouped) {
-                main.appendChild(buildFindingHeader(findingObject, groupID));
+                main.appendChild(buildFindingHeader(findingObject, groupID, sessionStorage.getItem("page")));
                 ruleHeader = document.getElementById(groupID);
                 var owasps = ruleHeader.querySelector(".owasp-list")
                 var cwes = ruleHeader.querySelector(".cwe-list")
@@ -121,17 +121,6 @@ function buildAllFindings(main, totalCurrentFindings, paginatedFindings, grouped
                 cwes.appendChild(buildCWE(findingObject["cwe"]));
                 let ruleContent = ruleHeader.querySelector('.rule-content');
                 let button = ruleContent.querySelector('.delete-button');
-
-                if (sessionStorage.getItem("page") == "trash") {
-                    button.setAttribute('onclick', `restoreRule("${groupID}")`);
-                    button.classList.remove('delete-button');
-                    button.classList.add('restore-button');
-
-                    let icon = button.querySelector('i');
-                    icon.classList.remove('material-icons');
-                    icon.classList.add('fa', 'fa-undo');
-                    icon.innerHTML = "";
-                }
                 buildFindingsContexts(findingObject, resultsDiv, groupID, grouped);
             }
 
@@ -274,7 +263,7 @@ function loadMoreTemplate(count, groupID) {
 }
 
 
-function buildFindingHeader(result, ID) {
+function buildFindingHeader(result, ID, page) {
 
     // Create main container div
     var groupDiv = document.createElement('div');
@@ -296,7 +285,7 @@ function buildFindingHeader(result, ID) {
     menuContainer.classList.add('menu-container');
 
     var kebabButton = document.createElement('button');
-    kebabButton.classList.add('delete-button', 'group-btn', 'kebab-menu');
+    kebabButton.classList.add('group-btn', 'kebab-menu');
     kebabButton.setAttribute('aria-label', 'More Options');
     kebabButton.setAttribute('aria-haspopup', 'true');
     kebabButton.setAttribute('aria-expanded', 'false');
@@ -311,9 +300,17 @@ function buildFindingHeader(result, ID) {
 
     var deleteOption = document.createElement('button');
     deleteOption.classList.add('menu-item', 'delete-option');
-    deleteOption.textContent = 'Delete';
-    // Move your dynamic delete function call here
-    deleteOption.setAttribute('onclick', `deleteRule("${ID}")`); 
+
+    if (page == "trash"){
+        deleteOption.textContent = 'Restore';
+        kebabButton.classList.add('restore-button');
+        deleteOption.setAttribute('onclick', `restoreRule("${ID}")`); 
+    }
+    else {
+        deleteOption.textContent = 'Trash';
+        kebabButton.classList.add('delete-button');
+        deleteOption.setAttribute('onclick', `deleteRule("${ID}")`); 
+    }
 
     dropdownMenu.appendChild(deleteOption);
     menuContainer.appendChild(kebabButton);
