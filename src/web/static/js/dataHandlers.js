@@ -52,5 +52,5 @@ function GetRules() {
     sitgrep_results["results"].forEach(result => {
         rules.push(result["rule_id"]);
     });
-    return _.uniq(rules, true);
+    return [...new Set(rules)];
 }
