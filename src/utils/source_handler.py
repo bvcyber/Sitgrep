@@ -65,7 +65,7 @@ def get_sources(path=SOURCES_PATH) -> list:
     try:
         sources = []
         with open(path, "r") as f:
-            sources = json.load(f)["sources"]
+            sources = json.load(f)
         return sources
     except FileNotFoundError:
         console.print("sources.json not found.")
