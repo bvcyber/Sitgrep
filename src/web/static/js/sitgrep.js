@@ -50,7 +50,6 @@ window.addEventListener("DOMContentLoaded", (event) => {
     loadPackageFilter();
     loadRuleFilter();
 
-
     //Add an event listener for the popstate event (back/forward navigation)
     window.addEventListener("popstate", function(event) {
         // Check if the state object exists
