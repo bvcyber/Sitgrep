@@ -292,14 +292,50 @@ function buildFindingHeader(result, ID) {
     groupDiv.appendChild(ruleContentDiv);
 
     // Create delete button
-    var deleteButton = document.createElement('button');
-    deleteButton.classList.add('delete-button', 'group-btn');
-    deleteButton.setAttribute('onclick', `deleteRule("${ID}")`);
-    var deleteIcon = document.createElement('i');
-    deleteIcon.classList.add('material-icons');
-    deleteIcon.textContent = 'delete';
-    deleteButton.appendChild(deleteIcon);
-    ruleContentDiv.appendChild(deleteButton);
+    var menuContainer = document.createElement('div');
+    menuContainer.classList.add('menu-container');
+
+    var kebabButton = document.createElement('button');
+    kebabButton.classList.add('delete-button', 'group-btn', 'kebab-menu');
+    kebabButton.setAttribute('aria-label', 'More Options');
+    kebabButton.setAttribute('aria-haspopup', 'true');
+    kebabButton.setAttribute('aria-expanded', 'false');
+
+    var kebabIcon = document.createElement('i');
+    kebabIcon.classList.add('material-icons');
+    kebabIcon.textContent = 'more_vert';
+    kebabButton.appendChild(kebabIcon);
+
+    var dropdownMenu = document.createElement('div');
+    dropdownMenu.classList.add('options-menu');
+
+    var deleteOption = document.createElement('button');
+    deleteOption.classList.add('menu-item', 'delete-option');
+    deleteOption.textContent = 'Delete';
+    // Move your dynamic delete function call here
+    deleteOption.setAttribute('onclick', `deleteRule("${ID}")`); 
+
+    dropdownMenu.appendChild(deleteOption);
+    menuContainer.appendChild(kebabButton);
+    menuContainer.appendChild(dropdownMenu);
+    ruleContentDiv.appendChild(menuContainer);
+
+    kebabButton.addEventListener('click', function(event) {
+        event.stopPropagation(); 
+        
+        var isExpanded = kebabButton.getAttribute('aria-expanded') === 'true';
+        
+        dropdownMenu.classList.toggle('show');
+        kebabButton.setAttribute('aria-expanded', !isExpanded);
+    });
+
+    document.addEventListener('click', function(event) {
+        if (!menuContainer.contains(event.target)) {
+            dropdownMenu.classList.remove('show');
+            kebabButton.setAttribute('aria-expanded', 'false');
+        }
+    });
+
 
     // Create rule name div
     var ruleNameDiv = document.createElement('div');
