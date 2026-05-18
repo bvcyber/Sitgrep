@@ -4,6 +4,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
     const revertButton = document.getElementById('resetPage');
     const main = document.getElementById('main-div');
     const pageTitle = document.getElementById("page-title");
+    sessionStorage.setItem("grouped", "true");
 
     hljs.configure({ 
         debug: false
@@ -28,6 +29,10 @@ window.addEventListener("DOMContentLoaded", (event) => {
     const viewSelectElement = document.getElementById('viewSelect');
     viewSelectElement.addEventListener('change', () => {
         sessionStorage.setItem("grouped", viewSelectElement.value == "grouped" ? "true" : "false");
+        let token = getToken();
+        token.maxResults = 5;
+        token.start = 0;
+        setToken(token);
         render();  
     });
 
