@@ -406,6 +406,8 @@ class SitgrepAgent:
             return False
 
     def restart(self, isRunning: bool):
+        if not OLLAMA_MANAGED:
+            return
         if self.stop():
             self.start(restart=isRunning)
         else:
