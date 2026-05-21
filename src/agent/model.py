@@ -11,6 +11,7 @@ class OllamaModel(str, Enum):
     # --- Larger / High reasoning (Needs more RAM) ---
     QWEN3_30B = "qwen3:30b"
     QWEN3_32B = "qwen3:32b"
+    QWEN36_35B = "qwen3.6:35b"
 
     # --- Massive Models ---
     QWEN3_235B = "qwen3:235b"
