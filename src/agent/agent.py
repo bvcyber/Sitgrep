@@ -361,7 +361,7 @@ class SitgrepAgent:
                 except concurrent.futures.TimeoutError:
                     log.warn(f"Agent {type} timed out. Restarting agent and retrying ({attempt}/{MAX_RETIRES})...")
                     self.restart(True)
-        raise "Failed to get agent response after 3 attempts... continuing..."
+        raise Exception("Failed to get agent response after 3 attempts... continuing...")
 
     def add_tool(self, tool: BaseTool):
         self.tools.append(tool)
