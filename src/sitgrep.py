@@ -155,7 +155,7 @@ def get_ai_message(output: Any, agent: AgentType):
         for msg in messages:
             if isinstance(msg, AIMessage) and str(msg.content).strip():
                 if VERBOSE_LEVEL > 1:
-                    log.debug(json.loads(str(msg.content)))
+                    log.debug(str(msg.content))
                 return json.loads(str(msg.content))
 
         log.warn("Got empty response from agent...")
@@ -653,6 +653,7 @@ def agent_analyze(
         agent_endpoint,
         num_ctx=agent_context,
         agent_timeout=agent_timeout,
+        verbosity=VERBOSE_LEVEL,
     )
     agent.start()
     TOTAL = len(scan_results["results"])
@@ -731,11 +732,15 @@ def agent_analyze(
                         tool_call_result = ""
 
                         if tool_name in agent.tool_map:
+                            if VERBOSE_LEVEL > 1:
+                                log.debug(" ".join(map(str, [agent.tool_map[tool_name].name, args])))
+
                             tool_call_result = safe_invoke(
                                 agent.tool_map[tool_name], args
                             )
+
                             if VERBOSE_LEVEL > 1:
-                                log.debug(tool_call_result)
+                                log.debug(str(tool_call_result)[0:2000])
                         else:
                             raise ValueError(f"Unknown tool: {tool_name}")
 

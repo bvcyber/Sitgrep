@@ -68,6 +68,7 @@ def opengrep_search(pattern: str, language: str):
             capture_output=True,
             text=True,
         )
+        # TODO: trim output to prevent context overflow
         data = json.loads(result.stdout)
         return data if data else "No context found."
     except Exception as e:
@@ -88,6 +89,8 @@ def grep_search(pattern, isRegex=False) -> str:
 
     pattern = sanitize_pattern(pattern)
 
+    # log.debug(f"Searching for pattern: {pattern} in {BASE_DIR}")
+
     try:
         if not isRegex:
             result = subprocess.run(
@@ -101,7 +104,8 @@ def grep_search(pattern, isRegex=False) -> str:
                 capture_output=True,
                 text=True,
             )
-        return result.stdout if result.stdout else "No matches found."
+        # TODO: adjust for context size
+        return result.stdout[:24000] if result.stdout else "No matches found."
 
     except Exception as e:
         return f"Error running grep: {str(e)}"
@@ -228,6 +232,7 @@ class SitgrepAgent:
         agent_endpoint: Optional[str] = None,
         num_ctx: int = DEFAULT_NUM_CTX,
         agent_timeout: int = DEFAULT_AGENT_TIMEOUT,
+        verbosity: int = 0,
     ):
 
         global OLLAMA_URL
@@ -245,6 +250,7 @@ class SitgrepAgent:
 
         self.model = model
         self.num_ctx = num_ctx
+        self.verbosity = verbosity
         self.agent_timeout = agent_timeout
         self.base_dir: Path = (
             Path(base_dir).resolve() if base_dir else Path(os.getcwd()).resolve()
@@ -275,6 +281,9 @@ class SitgrepAgent:
         )
 
     def initialize(self):
+
+        if self.verbosity > 0:
+            log.debug("Initializing models and agents")
 
         # Create LLMs
         self.engineer_model = ChatOllama(
@@ -310,6 +319,8 @@ class SitgrepAgent:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = None
                 if type == AgentType.ENGINEER:
+                    if self.verbosity > 0:
+                        log.debug("Running engineer agent")
                     future = executor.submit(
                         self.engineer_agent.invoke,
                         {
@@ -332,6 +343,8 @@ class SitgrepAgent:
                         config={"recursion_limit": 100},
                     )
                 elif type == AgentType.JUDGE:
+                    if self.verbosity > 0:
+                        log.debug("Running judge agent")
                     future = executor.submit(
                         self.judge_llm.invoke,
                         [
@@ -346,10 +359,9 @@ class SitgrepAgent:
                 try:
                     return future.result(timeout=self.agent_timeout)
                 except concurrent.futures.TimeoutError:
-                    # log.info(f"Agent timed out. Restarting agent and retrying ({attempt}/{MAX_RETIRES})...")
+                    log.warn(f"Agent {type} timed out. Restarting agent and retrying ({attempt}/{MAX_RETIRES})...")
                     self.restart(True)
-        log.warn("Failed to get agent response after 3 attempts... continuing...", True)
-        return {"messages": []}
+        raise "Failed to get agent response after 3 attempts... continuing..."
 
     def add_tool(self, tool: BaseTool):
         self.tools.append(tool)
@@ -406,8 +418,6 @@ class SitgrepAgent:
             return False
 
     def restart(self, isRunning: bool):
-        if not OLLAMA_MANAGED:
-            return
         if self.stop():
             self.start(restart=isRunning)
         else:
@@ -418,6 +428,9 @@ class SitgrepAgent:
             r = requests.get(OLLAMA_URL, timeout=2 if OLLAMA_MANAGED else 20)
             if r.status_code != 200:
                 raise Exception
+
+            if self.verbosity > 0:
+                log.debug("Ollama server is running")
 
         except Exception:
             self.process = self.__start_ollama()
