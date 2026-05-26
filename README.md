@@ -116,6 +116,8 @@ optional arguments:
   -ai, --agent        Enable AI triaging after scan finishes
   -l, --model         Specify the Ollama model to use for local instances
   -ae, --agent-endpoint Specify the Ollama server endpoint
+  -at, --agent-timeout Timeout for the agent in seconds (default 300)
+  -ac, --agent-context Context size for the agent (default 32000)
 ```
 
 1. Run the command `sitgrep` in the terminal with any additional arguments as needed.

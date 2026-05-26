@@ -34,7 +34,7 @@ from rich.traceback import install
 from rich_argparse import RichHelpFormatter
 
 from agent import agent, model
-from agent.agent import SitgrepAgent
+from agent.agent import SitgrepAgent, DEFAULT_NUM_CTX, DEFAULT_AGENT_TIMEOUT
 from agent.agents.types import AgentType
 from utils import logging as log
 from utils.archive_handler import extract_if_archive
@@ -155,7 +155,7 @@ def get_ai_message(output: Any, agent: AgentType):
         for msg in messages:
             if isinstance(msg, AIMessage) and str(msg.content).strip():
                 if VERBOSE_LEVEL > 1:
-                    log.debug(json.loads(str(msg.content)))
+                    log.debug(str(msg.content))
                 return json.loads(str(msg.content))
 
         log.warn("Got empty response from agent...")
@@ -639,10 +639,22 @@ def save_raw_semgrep_output(results: object):
 
 
 def agent_analyze(
-    model: model.OllamaModel, scan_results: dict, directory: str, agent_endpoint: str
+    model: model.OllamaModel,
+    scan_results: dict,
+    directory: str,
+    agent_endpoint: str,
+    agent_timeout: int = DEFAULT_AGENT_TIMEOUT,
+    agent_context: int = DEFAULT_NUM_CTX,
 ) -> dict:
 
-    agent = SitgrepAgent(model, directory, agent_endpoint)
+    agent = SitgrepAgent(
+        model,
+        directory,
+        agent_endpoint,
+        num_ctx=agent_context,
+        agent_timeout=agent_timeout,
+        verbosity=VERBOSE_LEVEL,
+    )
     agent.start()
     TOTAL = len(scan_results["results"])
 
@@ -720,11 +732,15 @@ def agent_analyze(
                         tool_call_result = ""
 
                         if tool_name in agent.tool_map:
+                            if VERBOSE_LEVEL > 1:
+                                log.debug(" ".join(map(str, [agent.tool_map[tool_name].name, args])))
+
                             tool_call_result = safe_invoke(
                                 agent.tool_map[tool_name], args
                             )
+
                             if VERBOSE_LEVEL > 1:
-                                log.debug(tool_call_result)
+                                log.debug(str(tool_call_result)[0:2000])
                         else:
                             raise ValueError(f"Unknown tool: {tool_name}")
 
@@ -1380,7 +1396,12 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
 
             if AGENT_ENABLED:
                 results = agent_analyze(
-                    args.model, scan_results, directory, args.agent_endpoint
+                    args.model,
+                    scan_results,
+                    directory,
+                    args.agent_endpoint,
+                    args.agent_timeout,
+                    args.agent_context,
                 )
                 save_results(results, output_file, directory, packages, AGENTIC=True)
 
@@ -1741,6 +1762,22 @@ def cli():
         help="URL to the agent endpoint",
         default="",
     )
+    local_parser.add_argument(
+        "-at",
+        "--agent-timeout",
+        required=False,
+        type=int,
+        help=f"Timeout for the agent in seconds (default {DEFAULT_AGENT_TIMEOUT})",
+        default=DEFAULT_AGENT_TIMEOUT,
+    )
+    local_parser.add_argument(
+        "-ac",
+        "--agent-context",
+        required=False,
+        type=int,
+        help=f"Context size for the agent (default {DEFAULT_NUM_CTX})",
+        default=DEFAULT_NUM_CTX,
+    )
 
     local_parser.add_argument(
         "-vs", "--vscode", action="store_true", help="Open the folder in VSCode"
@@ -1807,6 +1844,22 @@ def cli():
         type=str,
         help="URL to the agent endpoint",
         default="",
+    )
+    parser.add_argument(
+        "-at",
+        "--agent-timeout",
+        required=False,
+        type=int,
+        help=f"Timeout for the agent in seconds (default {DEFAULT_AGENT_TIMEOUT})",
+        default=DEFAULT_AGENT_TIMEOUT,
+    )
+    parser.add_argument(
+        "-ac",
+        "--agent-context",
+        required=False,
+        type=int,
+        help=f"Context size for the agent (default {DEFAULT_NUM_CTX})",
+        default=DEFAULT_NUM_CTX,
     )
     parser.add_argument(
         "-d",

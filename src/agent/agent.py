@@ -25,6 +25,10 @@ console = Console(color_system="truecolor")
 
 BASE_DIR: str = "."
 OLLAMA_URL = "http://localhost:11434"
+OLLAMA_MANAGED = True
+OLLAMA_ENV = os.environ.copy()
+DEFAULT_NUM_CTX = 32000
+DEFAULT_AGENT_TIMEOUT = 300
 
 @tool
 def opengrep_search(pattern: str, language: str):
@@ -64,6 +68,7 @@ def opengrep_search(pattern: str, language: str):
             capture_output=True,
             text=True,
         )
+        # TODO: trim output to prevent context overflow
         data = json.loads(result.stdout)
         return data if data else "No context found."
     except Exception as e:
@@ -84,6 +89,8 @@ def grep_search(pattern, isRegex=False) -> str:
 
     pattern = sanitize_pattern(pattern)
 
+    # log.debug(f"Searching for pattern: {pattern} in {BASE_DIR}")
+
     try:
         if not isRegex:
             result = subprocess.run(
@@ -97,7 +104,8 @@ def grep_search(pattern, isRegex=False) -> str:
                 capture_output=True,
                 text=True,
             )
-        return result.stdout if result.stdout else "No matches found."
+        # TODO: adjust for context size
+        return result.stdout[:24000] if result.stdout else "No matches found."
 
     except Exception as e:
         return f"Error running grep: {str(e)}"
@@ -190,22 +198,60 @@ class FileReadTool(BaseTool):
 
 
 class SitgrepAgent:
+    @classmethod
+    def get_ollama_process(cls) -> Optional[int]:
+        for proc in psutil.process_iter(["pid", "cmdline"]):
+            try:
+                cmdline = proc.info.get("cmdline")
+                if cmdline:
+                    low_cmdline = [arg.lower() for arg in cmdline]
+                    # Lenient check: "ollama" and "serve" in cmdline, ollama before serve
+                    ollama_idx = next(
+                        (i for i, arg in enumerate(low_cmdline) if "ollama" in arg),
+                        -1,
+                    )
+                    serve_idx = next(
+                        (i for i, arg in enumerate(low_cmdline) if arg == "serve"),
+                        -1,
+                    )
+
+                    if (
+                        ollama_idx != -1
+                        and serve_idx != -1
+                        and ollama_idx < serve_idx
+                    ):
+                        return proc.info["pid"]
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        return None
+
     def __init__(
         self,
         model: str = "qwen2.5-coder:14b",
         base_dir: Optional[str] = None,
         agent_endpoint: Optional[str] = None,
+        num_ctx: int = DEFAULT_NUM_CTX,
+        agent_timeout: int = DEFAULT_AGENT_TIMEOUT,
+        verbosity: int = 0,
     ):
 
         global OLLAMA_URL
         global BASE_DIR
+        global OLLAMA_MANAGED
 
         if agent_endpoint:
             OLLAMA_URL = agent_endpoint
+            OLLAMA_MANAGED = False
         else:
             OLLAMA_URL = "http://localhost:11434"
+            if SitgrepAgent.get_ollama_process():
+                OLLAMA_MANAGED = False
+        OLLAMA_ENV["OLLAMA_HOST"] = OLLAMA_URL
 
         self.model = model
+        self.num_ctx = num_ctx
+        self.verbosity = verbosity
+        self.agent_timeout = agent_timeout
         self.base_dir: Path = (
             Path(base_dir).resolve() if base_dir else Path(os.getcwd()).resolve()
         )
@@ -236,11 +282,15 @@ class SitgrepAgent:
 
     def initialize(self):
 
+        if self.verbosity > 0:
+            log.debug("Initializing models and agents")
+
         # Create LLMs
         self.engineer_model = ChatOllama(
+            base_url=OLLAMA_URL,
             model=self.model,
             temperature=0.1,
-            num_ctx=32000,
+            num_ctx=self.num_ctx,
             format="json",
             keep_alive="30m",
             
@@ -248,9 +298,10 @@ class SitgrepAgent:
         )
 
         judge_llm = ChatOllama(
+            base_url=OLLAMA_URL,
             model=self.model,
             temperature=0.0,
-            num_ctx=20000,
+            num_ctx=self.num_ctx,
             format="json",
         )
 
@@ -265,9 +316,11 @@ class SitgrepAgent:
     def send(self, type: AgentType, message: str):
         MAX_RETIRES = 3
         for attempt in range(MAX_RETIRES):
-            with concurrent.futures.ThreadPoolExecutor() as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = None
                 if type == AgentType.ENGINEER:
+                    if self.verbosity > 0:
+                        log.debug("Running engineer agent")
                     future = executor.submit(
                         self.engineer_agent.invoke,
                         {
@@ -290,6 +343,8 @@ class SitgrepAgent:
                         config={"recursion_limit": 100},
                     )
                 elif type == AgentType.JUDGE:
+                    if self.verbosity > 0:
+                        log.debug("Running judge agent")
                     future = executor.submit(
                         self.judge_llm.invoke,
                         [
@@ -297,36 +352,34 @@ class SitgrepAgent:
                             ("human", f"Here is the chat history: {message}"),
                         ],
                     )
+
+                if future is None:
+                    raise f"Unsupported agent type {type}"
+
                 try:
-                    return future.result(timeout=300)
+                    return future.result(timeout=self.agent_timeout)
                 except concurrent.futures.TimeoutError:
-                    # log.info(f"Agent timed out. Restarting agent and retrying ({attempt}/{MAX_RETIRES})...")
+                    log.warn(f"Agent {type} timed out. Restarting agent and retrying ({attempt}/{MAX_RETIRES})...")
                     self.restart(True)
-                    self.send(type, message)
-        log.warn("Failed to get agent response after 3 attempts... continuing...", True)
-        return {"messages": []}
+        raise Exception("Failed to get agent response after 3 attempts... continuing...")
 
     def add_tool(self, tool: BaseTool):
         self.tools.append(tool)
 
     def kill_ollama(self):
-        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        if not OLLAMA_MANAGED:
+            return False
+        
+        pid = SitgrepAgent.get_ollama_process()
+        if pid:
             try:
-                if proc.info["name"] and "ollama" in proc.info["name"].lower():
-                    log.info(f"Killing agent PID {proc.pid}")
-                    proc.kill()
-                    return True
-
-                # More reliable check:
-                elif proc.info["cmdline"] and any(
-                    "ollama" in arg.lower() for arg in proc.info["cmdline"]
-                ):
-                    log.info(f"Killing agent PID {proc.pid}")
-                    proc.kill()
-                    return True
-
+                proc = psutil.Process(pid)
+                log.info(f"Killing agent PID {pid}")
+                proc.kill()
+                return True
             except (psutil.NoSuchProcess, psutil.AccessDenied):
-                return False
+                pass
+        return False
 
     def __wait_for_ollama(self, timeout=60):
         start_time = time.time()
@@ -343,6 +396,8 @@ class SitgrepAgent:
         sys.exit(1)
 
     def __start_ollama(self):
+        if not OLLAMA_MANAGED:
+            return
         process = subprocess.Popen(
             ["ollama", "serve"],
             stdout=subprocess.DEVNULL,
@@ -351,6 +406,8 @@ class SitgrepAgent:
         return process
 
     def stop(self):
+        if not OLLAMA_MANAGED:
+            return True
         if hasattr(self, "process"):
             self.process.terminate()
             self.process.wait()
@@ -368,36 +425,49 @@ class SitgrepAgent:
 
     def start(self, restart=False):
         try:
-            r = requests.get(OLLAMA_URL, timeout=1)
+            r = requests.get(OLLAMA_URL, timeout=2 if OLLAMA_MANAGED else 20)
             if r.status_code != 200:
                 raise Exception
 
-            self.restart(isRunning=False)
-            
+            if self.verbosity > 0:
+                log.debug("Ollama server is running")
+
         except Exception:
             self.process = self.__start_ollama()
             self.__wait_for_ollama()
-            
+
             if not restart:
                 log.info("Ollama started...")
-                model_list = subprocess.run(
-                    ["ollama", "list"], capture_output=True, text=True
+
+        if not restart:
+            model_list = subprocess.run(
+                ["ollama", "list"],
+                capture_output=True,
+                text=True,
+                env=OLLAMA_ENV,
+            )
+
+            if self.model not in model_list.stdout:
+
+                log.info("Pulling agent model...")
+                output = subprocess.run(
+                    ["ollama", "pull", self.model],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    env=OLLAMA_ENV,
                 )
-
-                if self.model not in model_list.stdout:
-
-                    log.info("Pulling agent model...")
-                    output = subprocess.run(
-                        ["ollama", "pull", self.model], stdout=subprocess.PIPE, text=True
+                if (
+                    output.stderr
+                    and "requires a newer version of Ollama" in output.stderr
+                ):
+                    log.error(
+                        f"Ollama returned the following error: {output.stderr}",
+                        console,
+                        False,
                     )
-                    if hasattr(output, "stderr") and "requires a newer version of Ollama" in output.stderr:
-                        log.error(
-                            f"Ollama returned the following error: {output.stderr}",
-                            console,
-                            False,
-                        )
-                        sys.exit(1)
+                    sys.exit(1)
 
-                    log.info("Model downloaded...")
-            self.initialize()
+                log.info("Model downloaded...")
+        self.initialize()
 
