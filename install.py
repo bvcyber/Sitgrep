@@ -58,16 +58,9 @@ def get_os():
 
 
 def is_user_admin():
-    result = True
-    if get_os() == "posix":
-        if os.geteuid() != 0:
-            result = False
-
-    else:
-        error("Unsupported operating system detected. Quitting.")
-        sys.exit(1)
-
-    return result
+    if os.geteuid() != 0:
+        return False
+    return True
 
 
 def run(*args, **kwargs):
