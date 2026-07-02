@@ -876,7 +876,7 @@ function loadMore(groupID) {
 function buildDashboard() {
     let findingsCount = countFindings(RESULTS);
     let highFindingsCount = countHighSeverityFindings(RESULTS);
-    let ruleCount = RESULTS.length;
+    let ruleCount = GetRules().length;;
 
     // Create container div
     var containerDiv = document.createElement('div');
