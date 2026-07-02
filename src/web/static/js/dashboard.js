@@ -94,6 +94,15 @@ const likelihoodData = getLikelihoodData();
 const ruleIdData = getRuleIdData();
 const packageNameData = getPackageData();
 
+function countFindingsByRuleId(ruleId) {
+  let count = 0;
+  sitgrepResults.forEach(finding => {
+    if (finding.rule_id === ruleId) {
+      count += 1;
+    }
+  });
+  return count;
+}
 
 function getImpactData() {
 
@@ -104,7 +113,7 @@ function getImpactData() {
   };
 
   sitgrepResults.forEach(element => {
-    data[element.impact.toString().toLowerCase()] += element.findings.length;
+    data[element.impact.toString().toLowerCase()] += 1;
   });
   return [data.high, data.medium, data.low]
 
@@ -114,24 +123,26 @@ function getRuleIdData() {
 
   let result = []
   
-  sitgrepResults.forEach(element => {
+  sitgrepResults.forEach(finding => {
     let data = {};
-    data["rule"] = element.rule_id.toString().trim();
-    data["findings"] = element.findings.length;
+    data["rule"] = finding.rule_id.toString().trim();
+    data["findings"] = countFindingsByRuleId(finding.rule_id);
     result.push(data)
   });
 
   return result;
 }
 
+
+
 function getPackageData() {
 
   let result = []
   let tempData = {};
-  sitgrepResults.forEach(group => {
-    group.findings.forEach(finding => {
+  sitgrepResults.forEach(findingObject => {
+    
       for (let obj of packageList) {
-        if (finding.package == obj.project) {
+        if (findingObject.finding.package == obj.project) {
           if (tempData.hasOwnProperty(obj.project)){
             tempData[obj.project] += 1;
           }
@@ -141,7 +152,7 @@ function getPackageData() {
        
         }
       }
-    });
+
   });
   for(var key in tempData){
     result.push({"package": key, "findings": tempData[key]})
@@ -158,7 +169,7 @@ function getConfidenceData() {
   };
 
   sitgrepResults.forEach(element => {
-    data[element.confidence.toString().toLowerCase()] += element.findings.length;
+    data[element.confidence.toString().toLowerCase()] += 1;
   });
   return [data.high, data.medium, data.low]
 }
@@ -172,7 +183,7 @@ function getLikelihoodData() {
   };
 
   sitgrepResults.forEach(element => {
-    data[element.likelihood.toString().toLowerCase()] += element.findings.length;
+    data[element.likelihood.toString().toLowerCase()] += 1;
   });
   return [data.high, data.medium , data.low ]
 }

@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -33,17 +34,18 @@ from rich.traceback import install
 from rich_argparse import RichHelpFormatter
 
 from agent import agent, model
-from agent.agent import SitgrepAgent
+from agent.agent import SitgrepAgent, DEFAULT_NUM_CTX, DEFAULT_AGENT_TIMEOUT
 from agent.agents.types import AgentType
 from utils import logging as log
 from utils.archive_handler import extract_if_archive
 from utils.progressbar import ProgressBar
 from utils.source_handler import SourceHandler
+import uuid
 
 install(show_locals=True)
 console = Console(color_system="truecolor")
 
-VERSION = "3.8.2"
+VERSION = "3.8.3"
 TIMESTR = time.strftime("%Y%m%d%H%M%S")
 START_DIR = os.getcwd()
 INSTALL_DIR = f"{os.path.expanduser('~')}/.sitgrep"
@@ -153,7 +155,7 @@ def get_ai_message(output: Any, agent: AgentType):
         for msg in messages:
             if isinstance(msg, AIMessage) and str(msg.content).strip():
                 if VERBOSE_LEVEL > 1:
-                    log.debug(json.loads(str(msg.content)))
+                    log.debug(str(msg.content))
                 return json.loads(str(msg.content))
 
         log.warn("Got empty response from agent...")
@@ -473,9 +475,6 @@ def process_json(results, dir, packages, AGENTIC=False) -> dict:
                 rule_id = rule_id.removeprefix(".")
                 rule_parts = rule_id.split(".")
                 rule_id = f"{rule_parts[0]}.{rule_parts[-1]}"
-
-                rule_index = get_rule_index(json_results["results"], rule_id)
-
                 file_path = file
                 file_path_parts = file.split(os.sep)
 
@@ -489,14 +488,7 @@ def process_json(results, dir, packages, AGENTIC=False) -> dict:
                 if file_path.startswith(os.sep):
                     file_path = file_path[1:]
 
-                id = (
-                    f"{groupIndex}::{0}"
-                    if rule_index == -1
-                    else f"{json_results['results'][rule_index]['id']}::{len(json_results['results'][rule_index]['findings'])}"
-                )
-
                 finding = {
-                    "id": id,
                     "file": file_path,
                     "package": package_name,
                     "context": context,
@@ -508,25 +500,21 @@ def process_json(results, dir, packages, AGENTIC=False) -> dict:
 
                 if AGENTIC:
                     finding["agent_review"] = result.get("agent_review", "")
-
-                if rule_index == -1:
-                    json_results["results"].append(
-                        {
-                            "id": str(groupIndex),
-                            "rule_id": rule_id,
-                            "cwe": result["extra"]["metadata"]["cwe"],
-                            "description": result["extra"]["message"],
-                            "impact": result["extra"]["metadata"]["impact"],
-                            "likelihood": result["extra"]["metadata"]["likelihood"],
-                            "owasp": result["extra"]["metadata"]["owasp"],
-                            "confidence": result["extra"]["metadata"]["confidence"],
-                            "findings": [finding],
-                        }
-                    )
-                    groupIndex += 1
-                else:
-                    json_results["results"][rule_index]["findings"].append(finding)
-
+               
+                json_results["results"].append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "rule_id": rule_id,
+                        "cwe": result["extra"]["metadata"]["cwe"],
+                        "description": result["extra"]["message"],
+                        "impact": result["extra"]["metadata"]["impact"],
+                        "likelihood": result["extra"]["metadata"]["likelihood"],
+                        "owasp": result["extra"]["metadata"]["owasp"],
+                        "confidence": result["extra"]["metadata"]["confidence"],
+                        "finding": finding,
+                    }
+                )
+                 
         return json_results
     except KeyError:
         log.error("The following key could not be found while parsing JSON", console)
@@ -544,7 +532,7 @@ def get_rule_index(results: list, rule_id):
 
 
 def count_findings(results):
-    return sum(len(rule["findings"]) for rule in results["results"])
+    return len(results["results"])
 
 
 def save_results(scan_results: dict, output_file, dir="", packages=[], AGENTIC=False):
@@ -651,10 +639,22 @@ def save_raw_semgrep_output(results: object):
 
 
 def agent_analyze(
-    model: model.OllamaModel, scan_results: dict, directory: str, agent_endpoint: str
+    model: model.OllamaModel,
+    scan_results: dict,
+    directory: str,
+    agent_endpoint: str,
+    agent_timeout: int = DEFAULT_AGENT_TIMEOUT,
+    agent_context: int = DEFAULT_NUM_CTX,
 ) -> dict:
 
-    agent = SitgrepAgent(model, directory, agent_endpoint)
+    agent = SitgrepAgent(
+        model,
+        directory,
+        agent_endpoint,
+        num_ctx=agent_context,
+        agent_timeout=agent_timeout,
+        verbosity=VERBOSE_LEVEL,
+    )
     agent.start()
     TOTAL = len(scan_results["results"])
 
@@ -732,11 +732,15 @@ def agent_analyze(
                         tool_call_result = ""
 
                         if tool_name in agent.tool_map:
+                            if VERBOSE_LEVEL > 1:
+                                log.debug(" ".join(map(str, [agent.tool_map[tool_name].name, args])))
+
                             tool_call_result = safe_invoke(
                                 agent.tool_map[tool_name], args
                             )
+
                             if VERBOSE_LEVEL > 1:
-                                log.debug(tool_call_result)
+                                log.debug(str(tool_call_result)[0:2000])
                         else:
                             raise ValueError(f"Unknown tool: {tool_name}")
 
@@ -1392,7 +1396,12 @@ def start_scan(directory, output_file, packages, args, ALLOW_DOWNLOAD):
 
             if AGENT_ENABLED:
                 results = agent_analyze(
-                    args.model, scan_results, directory, args.agent_endpoint
+                    args.model,
+                    scan_results,
+                    directory,
+                    args.agent_endpoint,
+                    args.agent_timeout,
+                    args.agent_context,
                 )
                 save_results(results, output_file, directory, packages, AGENTIC=True)
 
@@ -1753,6 +1762,22 @@ def cli():
         help="URL to the agent endpoint",
         default="",
     )
+    local_parser.add_argument(
+        "-at",
+        "--agent-timeout",
+        required=False,
+        type=int,
+        help=f"Timeout for the agent in seconds (default {DEFAULT_AGENT_TIMEOUT})",
+        default=DEFAULT_AGENT_TIMEOUT,
+    )
+    local_parser.add_argument(
+        "-ac",
+        "--agent-context",
+        required=False,
+        type=int,
+        help=f"Context size for the agent (default {DEFAULT_NUM_CTX})",
+        default=DEFAULT_NUM_CTX,
+    )
 
     local_parser.add_argument(
         "-vs", "--vscode", action="store_true", help="Open the folder in VSCode"
@@ -1819,6 +1844,22 @@ def cli():
         type=str,
         help="URL to the agent endpoint",
         default="",
+    )
+    parser.add_argument(
+        "-at",
+        "--agent-timeout",
+        required=False,
+        type=int,
+        help=f"Timeout for the agent in seconds (default {DEFAULT_AGENT_TIMEOUT})",
+        default=DEFAULT_AGENT_TIMEOUT,
+    )
+    parser.add_argument(
+        "-ac",
+        "--agent-context",
+        required=False,
+        type=int,
+        help=f"Context size for the agent (default {DEFAULT_NUM_CTX})",
+        default=DEFAULT_NUM_CTX,
     )
     parser.add_argument(
         "-d",

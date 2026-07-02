@@ -4,6 +4,7 @@ window.addEventListener("DOMContentLoaded", (event) => {
     const revertButton = document.getElementById('resetPage');
     const main = document.getElementById('main-div');
     const pageTitle = document.getElementById("page-title");
+    sessionStorage.setItem("grouped", "true");
 
     hljs.configure({ 
         debug: false
@@ -25,6 +26,16 @@ window.addEventListener("DOMContentLoaded", (event) => {
         
     });
 
+    const viewSelectElement = document.getElementById('viewSelect');
+    viewSelectElement.addEventListener('change', () => {
+        sessionStorage.setItem("grouped", viewSelectElement.value == "grouped" ? "true" : "false");
+        let token = getToken();
+        token.maxResults = 5;
+        token.start = 0;
+        setToken(token);
+        render();  
+    });
+
     document.getElementById('main-content').onscroll = function() {
         if (document.getElementById('main-content').scrollTop > 1000) {
             document.getElementById('scroll-to-top').style.display = 'block';
@@ -38,7 +49,6 @@ window.addEventListener("DOMContentLoaded", (event) => {
     loadOWASPFilter();
     loadPackageFilter();
     loadRuleFilter();
-
 
     //Add an event listener for the popstate event (back/forward navigation)
     window.addEventListener("popstate", function(event) {

@@ -20,34 +20,39 @@ function render() {
     let deletedFindings = seperatedFindings[1];
     let sortedFindings, filteredFindings;
     let page = sessionStorage.getItem("page");
+    let grouped = sessionStorage.getItem("grouped") === "true" || null ? true : false;
 
-    if (page == "trash") {
-        pageContents = deletedFindings;
-        document.getElementById('opts').style.display = "inline-flex";
-        document.getElementById("trash-nav").style.color = "#0094d4";
-        document.getElementById("dashboard-nav").style.color = "white";
-        document.getElementById("findings-nav").style.color = "white";
+    if (page == "trash" || page == "findings") {
+        if (page == "trash") {
+            pageContents = deletedFindings;
+            document.getElementById('opts').style.display = "inline-flex";
+            document.getElementById("trash-nav").style.color = "#0094d4";
+            document.getElementById("dashboard-nav").style.color = "white";
+            document.getElementById("findings-nav").style.color = "white";
+        }
+        else {
+            pageContents = activeFindings;
+            document.getElementById('opts').style.display = "inline-flex";
+            document.getElementById("trash-nav").style.color = "white";
+            document.getElementById("dashboard-nav").style.color = "white";
+            document.getElementById("findings-nav").style.color = "#0094d4";
+        }
         filteredFindings = getFilteredFindings(pageContents);
         sortedFindings = sortFindings(filteredFindings);
+        if (grouped) {
+            sortedFindings = Array.from(new Map(sortedFindings.map(findingObject => [findingObject.rule_id, findingObject])).values());
+        }
         pageContents = getPaginatedFindings(sortedFindings);
+
     }
-    else if (page == "dashboard") {
+    else {
         scrollPosition = 0;
         document.getElementById('opts').style.display = "none";
         document.getElementById("trash-nav").style.color = "white";
         document.getElementById("dashboard-nav").style.color = "#0094d4";
         document.getElementById("findings-nav").style.color = "white";
     }
-    else if (page == "findings") {
-        pageContents = activeFindings;
-        document.getElementById('opts').style.display = "inline-flex";
-        document.getElementById("trash-nav").style.color = "white";
-        document.getElementById("dashboard-nav").style.color = "white";
-        document.getElementById("findings-nav").style.color = "#0094d4";
-        filteredFindings = getFilteredFindings(pageContents);
-        sortedFindings = sortFindings(filteredFindings);
-        pageContents = getPaginatedFindings(sortedFindings);
-    }
+
 
     let cap = page.toLocaleLowerCase().split('');
     cap[0] = cap[0].toUpperCase();
@@ -57,7 +62,7 @@ function render() {
     if (sortedFindings && sortedFindings.length < 1) {
         main.appendChild(empty_page());
         document.getElementById('loading-animation').style.display = 'none';
-        main.style.display = 'inline-flex';
+        main.style.display = 'block';
     }
     else if (page == "dashboard") {
         main.appendChild(buildDashboard());
@@ -87,51 +92,38 @@ function render() {
     }
     else {
         setTimeout(() => {
-            buildAllFindings(main, sortedFindings, pageContents);
+            buildAllFindings(main, sortedFindings.length, pageContents, grouped);
             setScrollPosition(scrollPosition);
         }, 20);
     }
 }
 
-function buildAllFindings(main, sortedFindings, pageContents) {
+function buildAllFindings(main, totalCurrentFindings, paginatedFindings, grouped = false) {
     if (main) {
-        MAX_PAGES = Math.ceil(sortedFindings.length / getToken().maxResults);
-        for (var i = 0; i < pageContents.length; i++) {
 
-            let findingGroup = pageContents[i];
+        MAX_PAGES = Math.ceil(totalCurrentFindings / getToken().maxResults);
+        for (var i = 0; i < paginatedFindings.length; i++) {
 
-            if (findingGroup.findings.length < 1) {
-                continue;
-            }
+            let findingObject = paginatedFindings[i];
+            let groupID = `object:finding:${findingObject["id"]}`;
+            if (grouped)
+                groupID = `object:group:${findingObject["rule_id"]}`;
 
-            main.appendChild(buildGroup(findingGroup));
-            var group = document.getElementById(findingGroup["id"].toString());
-            var owasps = group.querySelector(".owasp-list")
-            var cwes = group.querySelector(".cwe-list")
-            var resultsDiv = group.querySelector(".results");
+            var ruleHeader = document.getElementById(groupID);
 
-            owasps.appendChild(buildOWASP(findingGroup["owasp"]));
-            cwes.appendChild(buildCWE(findingGroup["cwe"]));
-
-            if (sessionStorage.getItem("page") == "trash") {
-                let ruleContent = group.querySelector('.rule-content');
+            if (grouped && ruleHeader === null || !grouped) {
+                main.appendChild(buildFindingHeader(findingObject, groupID, sessionStorage.getItem("page")));
+                ruleHeader = document.getElementById(groupID);
+                var owasps = ruleHeader.querySelector(".owasp-list")
+                var cwes = ruleHeader.querySelector(".cwe-list")
+                var resultsDiv = ruleHeader.querySelector(".results");
+                owasps.appendChild(buildOWASP(findingObject["owasp"]));
+                cwes.appendChild(buildCWE(findingObject["cwe"]));
+                let ruleContent = ruleHeader.querySelector('.rule-content');
                 let button = ruleContent.querySelector('.delete-button');
-                button.setAttribute('onclick', `restoreRuleGroup(${findingGroup["id"].toString()})`);
-                button.classList.remove('delete-button');
-                button.classList.add('restore-button');
+                buildFindingsContexts(findingObject, resultsDiv, groupID, grouped);
+            }
 
-                let icon = button.querySelector('i');
-                icon.classList.remove('material-icons');
-                icon.classList.add('fa', 'fa-undo');
-                icon.innerHTML = "";
-                buildFindingsContexts(findingGroup, resultsDiv);
-            }
-            else {
-                let ruleContent = group.querySelector('.rule-content');
-                let button = ruleContent.querySelector('.delete-button');
-                button.setAttribute('onclick', `deleteRuleGroup(${findingGroup["id"].toString()})`);
-                buildFindingsContexts(findingGroup, resultsDiv);
-            }
         }
         if (MAX_PAGES > 1) {
             main.appendChild(buildPagination());
@@ -142,13 +134,12 @@ function buildAllFindings(main, sortedFindings, pageContents) {
     }
 }
 
-function buildFinding(finding, resultsDiv, shouldHide) {
-
+function buildFinding(findingObject, resultsDiv, shouldHide, findingId, groupID) {
+    const finding = findingObject.finding;
     const start = finding["start"];
     const end = finding["end"];
     const file_size = finding["file_size"];
     const file = finding["file"];
-    const findingId = finding["id"];
     const fullFile = finding["fullFile"];
     const agent_review = finding["agent_review"] ?? null;
 
@@ -159,7 +150,7 @@ function buildFinding(finding, resultsDiv, shouldHide) {
     let linkLine = start === end ? `L${start}` : `L${start}-L${end}`;
     const link = generatePackageUrl(packageList, file, linkLine, fullFile);
 
-    resultsDiv.appendChild(finding_template_linked(file, line, findingId, link, agent_review));
+    resultsDiv.appendChild(finding_template_linked(file, line, findingId, link, groupID, agent_review));
 
     let contextDivs = resultsDiv.querySelectorAll(".context");
     let latestFinding = contextDivs[contextDivs.length - 1];
@@ -193,7 +184,7 @@ function buildFinding(finding, resultsDiv, shouldHide) {
     if (sessionStorage.getItem("page") == "trash") {
         let buttons = latestFinding.querySelector('.contextBtns');
         let button = buttons.querySelector('.delete-button');
-        button.setAttribute('onclick', `restoreContext("${findingId.toString()}")`);
+        button.setAttribute('onclick', `restoreContext("${findingId}", "${groupID}")`);
         button.classList.remove('delete-button');
         button.classList.add('restore-button');
 
@@ -205,20 +196,33 @@ function buildFinding(finding, resultsDiv, shouldHide) {
 
 }
 
-function buildFindingsContexts(findingGroup, resultsDiv) {
-    var i = 0;
-    const maxContexts = 5;
-    for (const finding of findingGroup.findings) {
-        if (i >= maxContexts) {
-            resultsDiv.appendChild(loadMoreTemplate(findingGroup.findings.length - maxContexts, findingGroup.id));
-            break;
-        }
-        buildFinding(finding, resultsDiv, false);
-        i++;
-    };
+function buildFindingsContexts(findingObject, resultsDiv, groupID, grouped = false) {
+    if (grouped) {
+        var i = 0;
+        const maxContexts = 5;
+        const findings = getFindingsByRuleId(findingObject.rule_id);
+        for (const finding of findings) {
+            if (
+                (getToken().deleted.includes(finding.id) && sessionStorage.getItem("page") == "findings")
+                || 
+                (!getToken().deleted.includes(finding.id) && sessionStorage.getItem("page") == "trash")
+            ) {
+                continue;
+            }
 
-
+            if (i >= maxContexts) {
+                resultsDiv.appendChild(loadMoreTemplate(findings.length - maxContexts, groupID));
+                break;
+            }
+            buildFinding(finding, resultsDiv, false, finding.id, groupID);
+            i++;
+        };
+    }
+    else {
+        buildFinding(findingObject, resultsDiv, false, findingObject.id, groupID);
+    }
 }
+
 function getIcon(link) {
     if (link.includes("github"))
         return "static/img/github.svg"
@@ -227,6 +231,7 @@ function getIcon(link) {
     else
         return "static/img/vscode.png"
 }
+
 function loadMoreTemplate(count, groupID) {
     // Create main container div
     var contextDiv = document.createElement('div');
@@ -258,12 +263,12 @@ function loadMoreTemplate(count, groupID) {
 }
 
 
-function buildGroup(result) {
+function buildFindingHeader(result, ID, page) {
 
     // Create main container div
     var groupDiv = document.createElement('div');
     groupDiv.classList.add('rule-group');
-    groupDiv.id = result["id"];
+    groupDiv.id = ID;
 
     // Create group color div
     var groupColorDiv = document.createElement('div');
@@ -276,14 +281,58 @@ function buildGroup(result) {
     groupDiv.appendChild(ruleContentDiv);
 
     // Create delete button
-    var deleteButton = document.createElement('button');
-    deleteButton.classList.add('delete-button', 'group-btn');
-    deleteButton.setAttribute('onclick', `deleteRuleGroup(${result["id"]})`);
-    var deleteIcon = document.createElement('i');
-    deleteIcon.classList.add('material-icons');
-    deleteIcon.textContent = 'delete';
-    deleteButton.appendChild(deleteIcon);
-    ruleContentDiv.appendChild(deleteButton);
+    var menuContainer = document.createElement('div');
+    menuContainer.classList.add('menu-container');
+
+    var kebabButton = document.createElement('button');
+    kebabButton.classList.add('group-btn', 'kebab-menu');
+    kebabButton.setAttribute('aria-label', 'More Options');
+    kebabButton.setAttribute('aria-haspopup', 'true');
+    kebabButton.setAttribute('aria-expanded', 'false');
+
+    var kebabIcon = document.createElement('i');
+    kebabIcon.classList.add('material-icons');
+    kebabIcon.textContent = 'more_vert';
+    kebabButton.appendChild(kebabIcon);
+
+    var dropdownMenu = document.createElement('div');
+    dropdownMenu.classList.add('options-menu');
+
+    var deleteOption = document.createElement('button');
+    deleteOption.classList.add('menu-item', 'delete-option');
+
+    if (page == "trash"){
+        deleteOption.textContent = 'Restore';
+        kebabButton.classList.add('restore-button');
+        deleteOption.setAttribute('onclick', `restoreRule("${ID}")`); 
+    }
+    else {
+        deleteOption.textContent = 'Trash';
+        kebabButton.classList.add('delete-button');
+        deleteOption.setAttribute('onclick', `deleteRule("${ID}")`); 
+    }
+
+    dropdownMenu.appendChild(deleteOption);
+    menuContainer.appendChild(kebabButton);
+    menuContainer.appendChild(dropdownMenu);
+    ruleContentDiv.appendChild(menuContainer);
+
+    kebabButton.addEventListener('click', function(event) {
+        event.stopPropagation(); 
+        
+        var isExpanded = kebabButton.getAttribute('aria-expanded') === 'true';
+        
+        dropdownMenu.classList.toggle('show');
+        kebabButton.setAttribute('aria-expanded', !isExpanded);
+    });
+
+    document.addEventListener('click', function(event) {
+        if (!menuContainer.contains(event.target)) {
+            dropdownMenu.classList.remove('show');
+            kebabButton.setAttribute('aria-expanded', 'false');
+        }
+    });
+
 
     // Create rule name div
     var ruleNameDiv = document.createElement('div');
@@ -472,7 +521,7 @@ function cwe_template(cwe) {
 function getApp(link) {
     const url = new URL(link);
     const host = url.hostname.split(".").slice(0, -1).join(".");
-    if (host.toLocaleLowerCase() == "github"){
+    if (host.toLocaleLowerCase() == "github") {
         return "Github"
     }
     else if (host.toLocaleLowerCase() == "gitlab") {
@@ -483,7 +532,7 @@ function getApp(link) {
     }
 }
 
-function finding_template_linked(file, line, findingId, link, agent_review=null) {
+function finding_template_linked(file, line, findingId, link, groupID, agent_review = null) {
     // Create main container div
     var contextDiv = document.createElement('div');
     contextDiv.classList.add('context', 'bordered');
@@ -592,13 +641,13 @@ function finding_template_linked(file, line, findingId, link, agent_review=null)
             }
         });
 
-        ai_content.appendChild(ai_icon);      
+        ai_content.appendChild(ai_icon);
         ai_content.appendChild(sevEl);
         ai_content.appendChild(reasonEl);
 
         contextFileDiv.appendChild(ai_content);
     }
-    
+
     contextOptsDiv.appendChild(contextFileDiv);
 
     // Create context buttons div
@@ -610,7 +659,7 @@ function finding_template_linked(file, line, findingId, link, agent_review=null)
     var deleteButton = document.createElement('button');
     deleteButton.classList.add('delete-button', 'context-btn');
     deleteButton.title = "Delete";
-    deleteButton.setAttribute('onclick', `deleteContext('${findingId}')`);
+    deleteButton.setAttribute('onclick', `deleteContext("${findingId}", "${groupID}")`);
     var deleteIcon = document.createElement('i');
     deleteIcon.classList.add('material-icons');
     deleteIcon.textContent = 'delete';
@@ -633,7 +682,7 @@ function finding_template_linked(file, line, findingId, link, agent_review=null)
     viewButton.target = "_blank";
     viewButton.title = `View in ${getApp(link)}`;
     var viewIcon = document.createElement('img');
-    viewIcon.src = getIcon(link);  
+    viewIcon.src = getIcon(link);
     viewIcon.alt = 'View';
     viewIcon.style.width = '16px';
     viewIcon.style.height = '16px';
@@ -659,10 +708,11 @@ function finding_template_linked(file, line, findingId, link, agent_review=null)
 
     return contextDiv;
 }
+
 function highlighted_code_line_template(code, top, bottom) {
     // Create highlighted code div
     var highlightedCodeDiv = document.createElement('div');
-    if (top || bottom){
+    if (top || bottom) {
         if (top) {
             highlightedCodeDiv.classList.add('highlighted-top');
         }
@@ -706,8 +756,8 @@ function code_template(code, lineNumber, start_line, end_line, filePath) {
     for (let i = start_line; i < end_line; i++) {
         let index = i - start_line
         const lang = getLanguageByExtension(filePath);
-        lines[index] = hljs.highlight(lines[index], {language:lang, ignoreIllegals:true}).value;
-        if (i == lineStart && i == lineEnd){
+        lines[index] = hljs.highlight(lines[index], { language: lang, ignoreIllegals: true }).value;
+        if (i == lineStart && i == lineEnd) {
             codeElement.appendChild(highlighted_code_line_template(lines[index], true, true))
         }
         else if (i == lineStart) {
@@ -746,7 +796,7 @@ function highlighted_line_template(num, top, bottom) {
     highlightedLineNumberDiv.classList.add('line-number');
 
     if (top || bottom) {
-        if (top){
+        if (top) {
             highlightedLineNumberDiv.classList.add('highlighted-top');
         }
         if (bottom) {
@@ -805,14 +855,12 @@ function buildPagination() {
 }
 
 function loadMore(groupID) {
-    groupID = parseInt(groupID);
-    let groupIndex = getIndexById(groupID, pageContents)
-    let group = pageContents[groupIndex];
-    let groupHTML = document.getElementById(group.id);
+    let group = getFindingsByRuleId(groupID.split(":").pop());
+    let groupHTML = document.getElementById(groupID);
     let contexts = groupHTML.querySelector('.results');
 
-    for (let i = 5; i < group.findings.length; i++) {
-        buildFinding(group.findings[i], contexts, true);
+    for (let i = 5; i < group.length; i++) {
+        buildFinding(group[i], contexts, true, group[i].id, groupID);
     }
 
     let more = contexts.querySelector("#more");
@@ -824,10 +872,11 @@ function loadMore(groupID) {
         }
     });
 }
+
 function buildDashboard() {
     let findingsCount = countFindings(RESULTS);
     let highFindingsCount = countHighSeverityFindings(RESULTS);
-    let ruleCount = RESULTS.length;
+    let ruleCount = GetRules().length;
 
     // Create container div
     var containerDiv = document.createElement('div');
@@ -1053,7 +1102,7 @@ function generatePackageUrl(packages, file, line, fullFile) {
                         let lineNumber = line.replace("L", "")
                         let lineSplit = line.split("-")
 
-                        if(lineSplit.length == 2){
+                        if (lineSplit.length == 2) {
                             lineNumber = lineSplit[0].replace("L", "")
                         }
 
@@ -1068,7 +1117,7 @@ function generatePackageUrl(packages, file, line, fullFile) {
             let lineNumber = line.replace("L", "")
             let lineSplit = line.split("-")
 
-            if(lineSplit.length == 2){
+            if (lineSplit.length == 2) {
                 lineNumber = lineSplit[0].replace("L", "")
             }
 

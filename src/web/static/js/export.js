@@ -17,24 +17,22 @@ function download(json) {
 function exportToJson() {
     let json = { results: []}
 
-    let ruleGroups = seperateFindings(structuredClone(RESULTS))[0];
-
-    ruleGroups.forEach((ruleGroup, index) => {
+    let findings = seperateFindings(structuredClone(RESULTS))[0];
+    findings.forEach((findingObject, index) => {
 
         let finding = {}
-        finding.name = ruleGroup.rule_id.trim();
-        finding.findings = ruleGroup.findings
-        finding.cwes = ruleGroup.cwe
-        finding.wasps = ruleGroup.owasp
+        finding.id = findingObject.id;
+        finding.name = findingObject.rule_id.trim();
+        finding.cwes = findingObject.cwe
+        finding.wasps = findingObject.owasp
 
-        finding.findings.forEach((context, index) => {
-
-            let line = context.start.toString();
-            if (context.start != context.end){
-                line = `${context.start}-${context.end}`
-            }
-            context.line = line;
-        });
+        let line = findingObject.finding.start.toString();
+        if (findingObject.finding.start != findingObject.finding.end){
+            line = `${findingObject.finding.start}-${findingObject.finding.end}`
+        }
+        finding.line = line;
+        finding.file = findingObject.finding.file;
+        finding.context = findingObject.finding.context;
 
         json.results.push(finding)
     });

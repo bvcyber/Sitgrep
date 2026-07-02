@@ -22,6 +22,16 @@ h3 {
   cursor: pointer;
 }
 
+.view-select {
+  padding: 3px;
+}
+
+.view-title {
+  font-size: large;
+    margin-top: 10px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+}
+
 .ai-review {
   padding: 5px;
   border: #363535 1px solid;
@@ -255,6 +265,47 @@ div#topBar {
   display: none;
 }
 
+/* Ensure the menu anchors properly to the button */
+.menu-container {
+  position: relative;
+}
+
+/* Hide the dropdown menu layout by default */
+.options-menu {
+  display: none;
+  position: absolute;
+  right: 35px;
+  top: 100%;
+  background: rgb(18, 18, 18);
+  border: 1px solid #414141;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(43, 43, 43, 0.222);
+  z-index: 100;
+  min-width: 100px;
+}
+
+/* Reveal style triggered by JS toggle */
+.options-menu.show {
+  display: block;
+}
+
+/* Style the button inside the dropdown */
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color:white;
+}
+
+.menu-item:hover {
+  background-color: #282c34;
+}
+
+
 /* Style page content - use this if you want to push the page content to the right when you open the side navigation */
 
 /* On smaller screens, where height is less than 450px, change the style of the sidenav (less padding and a smaller font size) */
@@ -366,11 +417,12 @@ pre {
 }
 
 .filter-options {
-  display: flex;
-  flex-direction: row;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  margin-top: 12px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    justify-content: space-around;
+    width: 100%;
 }
 
 .filter-option {
@@ -1052,8 +1104,7 @@ pre {
     border-radius: 5px;
     background-color: rgb(26 28 33);
     width: calc(100% - 20px);
-
-    
+    border: 0.5px solid #3a3939;
 }
 
 .filterBtns {

@@ -10,3 +10,5 @@ __MACOSX*
 test.py
 *.egg-info
 Sitgrep_Packages*
+.idea/
+.junie/

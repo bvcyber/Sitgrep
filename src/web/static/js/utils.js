@@ -1,11 +1,20 @@
 function countFindings(results) {
-    let count = 0;
+    return results.length
+}
 
-    for (let rule of results) {
-        count += rule.findings.length;
+function getFindingsByRuleId(ruleId) {
+  let findings = [];
+  sitgrepResults.forEach(finding => {
+    if (finding.rule_id === ruleId || finding.id === ruleId) {
+      findings.push(finding);
     }
+  });
+  return findings;
+}
 
-    return count;
+function getGroupById(groupId, pageContents) {
+    let group = [];
+    return pageContents.find(finding => finding.rule_id === groupId.split(':').pop());
 }
 
 function countHighSeverityFindings(results) {
@@ -15,7 +24,7 @@ function countHighSeverityFindings(results) {
         if ((rule.impact.toLowerCase() == "high" && rule.likelihood.toLowerCase() == "high") ||
             (rule.impact.toLowerCase() == "high" && rule.likelihood.toLowerCase() == "medium") ||
             (rule.impact.toLowerCase() == "medium" && rule.likelihood.toLowerCase() == "high")) {
-            count += rule.findings.length;
+            count += 1;
         }
     }
 
