@@ -21,6 +21,7 @@ function exportToJson() {
     findings.forEach((findingObject, index) => {
 
         let finding = {}
+        finding.id = findingObject.id;
         finding.name = findingObject.rule_id.trim();
         finding.cwes = findingObject.cwe
         finding.wasps = findingObject.owasp
