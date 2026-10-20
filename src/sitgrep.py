@@ -1208,6 +1208,7 @@ def get_packages_from_dir(dir):
         return packages
     
     folders = getFolders(dir)
+    original_dir = os.getcwd()
     os.chdir(dir)
 
     if os.path.isfile("sitgrep-config.json"):
@@ -1237,7 +1238,7 @@ def get_packages_from_dir(dir):
             }
         )
 
-    os.chdir("../")
+    os.chdir(original_dir)
     return packages
 
 

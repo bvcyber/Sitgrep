@@ -7,8 +7,24 @@ import shutil
 import subprocess
 import getpass
 import argparse
-from rich_argparse import RichHelpFormatter
-from rich.console import Console
+
+
+def bootstrap():
+    """Install the installer's own display dependencies if they are missing."""
+    try:
+        import rich  # noqa: F401
+        import rich_argparse  # noqa: F401
+    except ImportError:
+        cmd = [sys.executable, "-m", "pip", "install", "rich", "rich-argparse"]
+        if sys.base_prefix == sys.prefix:
+            cmd.append("--user")
+        subprocess.run(cmd, check=True)
+
+
+bootstrap()
+
+from rich_argparse import RichHelpFormatter  # noqa: E402
+from rich.console import Console  # noqa: E402
 
 console = Console(color_system="truecolor")
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))

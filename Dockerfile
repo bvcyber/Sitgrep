@@ -3,35 +3,33 @@ FROM python:3.12
 
 RUN adduser --disabled-password --gecos '' sitgrep
 
-RUN mkdir /sitgrep
-RUN mkdir /sitgrep/static
-RUN mkdir /sitgrep/static/js
-RUN mkdir /sitgrep/static/css
-RUN mkdir /sitgrep/static/img
-RUN mkdir /sitgrep/reports
+RUN mkdir -p /sitgrep/static/js /sitgrep/static/css /sitgrep/static/img /sitgrep/reports /install \
+    && chown -R sitgrep:sitgrep /sitgrep /install
 
-COPY ./src/docker/static/js /sitgrep/static/js
-COPY ./src/docker/static/css /sitgrep/static/css
-COPY ./src/docker/static/img /sitgrep/static/img
-COPY ./src/docker/main.py /sitgrep/
-COPY ./src/docker/templates /sitgrep/templates
-
-RUN chown -R sitgrep:sitgrep /sitgrep
+COPY --chown=sitgrep:sitgrep ./src/docker/static/js /sitgrep/static/js
+COPY --chown=sitgrep:sitgrep ./src/docker/static/css /sitgrep/static/css
+COPY --chown=sitgrep:sitgrep ./src/docker/static/img /sitgrep/static/img
+COPY --chown=sitgrep:sitgrep ./src/docker/main.py /sitgrep/
+COPY --chown=sitgrep:sitgrep ./src/docker/templates /sitgrep/templates
 
 WORKDIR /install
-COPY . /install
-ENV PYTHONPATH=/install/src:$PYTHONPATH
-RUN chown -R sitgrep:sitgrep /install
+ENV PYTHONPATH=/install/src
+ENV PIP_NO_CACHE_DIR=1
 USER sitgrep
 ENV PATH="/home/sitgrep/.local/bin:${PATH}"
-RUN pip install Flask
-RUN pip install GitPython>=3.1.43
-RUN pip install rich
-RUN pip install PyYAML
+
+# Install dependencies from an empty package stub first so this layer is only
+# rebuilt when pyproject.toml changes, not on every source edit.
+COPY --chown=sitgrep:sitgrep pyproject.toml README.md ./
+RUN mkdir src && touch src/__init__.py \
+    && pip install ".[web]" \
+    && rm -rf src build
+
+COPY --chown=sitgrep:sitgrep . .
 RUN python install.py
 
 WORKDIR /sitgrep
-EXPOSE 8000
+EXPOSE 9000
 
 RUN sitgrep sources fetch
 CMD ["python", "/sitgrep/main.py"]

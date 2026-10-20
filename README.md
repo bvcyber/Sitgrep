@@ -36,15 +36,11 @@ Sitgrep offers an intuitive solution for scanning GitHub and GitLab repositories
   python3 -m venv sitgrep_venv && source sitgrep_venv/bin/activate
   ```
 
-3. Install the requirements:
+3. Run the install script (requires Python 3.10 or newer, because Sitgrep uses `match` statements and langchain 1.x). It installs Sitgrep and its dependencies, which are declared in `pyproject.toml`:
    ```
-   python3 -m pip install -r requirements.txt
+   python3 install.py
    ```
-4. Run the install script:
-   ```
-    python3 install.py
-   ```
-5. Run the rule fetcher:
+4. Run the rule fetcher:
    ```
    sitgrep sources fetch
    ```

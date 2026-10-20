@@ -105,7 +105,12 @@ def scan():
                 while "\n" in buffer:
                     line, buffer = buffer.split("\n", 1)
                     if "sitgrep-report" in line:
-                        results_path = line.split(" ")[-1].strip()
+                        results_path = (
+                            ansi_escape_pattern.sub("", line)
+                            .split(" ")[-1]
+                            .strip()
+                            .removeprefix("file://")
+                        )
                         logging.info("Result path found...")
                         logging.info(line)
                     elif "ERROR" in line:

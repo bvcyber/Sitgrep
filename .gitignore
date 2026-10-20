@@ -1,14 +1,51 @@
-sitgrep-report*
-.DS_Store*
-sitgrep.code-workspace
-__pycache__*
-*.pyc
-build*
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
 *.spec
-test.txt
-__MACOSX*
-test.py
-*.egg-info
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Dependency lock files
+uv.lock
+
+# Tool caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Sitgrep output
+sitgrep-report*
 Sitgrep_Packages*
+
+# Scratch files
+test.py
+test.txt
+
+# IDE / editor
 .idea/
 .junie/
+.vscode/
+sitgrep.code-workspace
+*.swp
+
+# OS
+.DS_Store
+__MACOSX/
+Thumbs.db

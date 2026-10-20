@@ -1,34 +1,32 @@
-{
-  "sources": [
-    {
-      "id": "semgrep",
-      "url": "https://github.com/semgrep/semgrep-rules",
-      "categories":[
-        "GENERAL",
-        "MOBILE"
-      ]
-    },
-    {
-      "id": "bureauveritascybersecurity",
-      "url": "",
-      "categories":[
-        "GENERAL",
-        "MOBILE"
-      ]
-    },
-    {
-      "id": "mindedsecurity",
-      "url": "https://github.com/mindedsecurity/semgrep-rules-android-security",
-      "categories":[
-        "MOBILE"
-      ]
-    },
-    {
-      "id": "insideapp-oss",
-      "url": "https://github.com/insideapp-oss/mobile-application-security-rules",
-      "categories":[
-        "MOBILE"
-      ]
-    }
-  ]
-}
+[
+  {
+    "id": "semgrep",
+    "url": "https://github.com/semgrep/semgrep-rules",
+    "categories": [
+      "GENERAL",
+      "MOBILE"
+    ]
+  },
+  {
+    "id": "bureauveritascybersecurity",
+    "url": "",
+    "categories": [
+      "GENERAL",
+      "MOBILE"
+    ]
+  },
+  {
+    "id": "mindedsecurity",
+    "url": "https://github.com/mindedsecurity/semgrep-rules-android-security",
+    "categories": [
+      "MOBILE"
+    ]
+  },
+  {
+    "id": "insideapp-oss",
+    "url": "https://github.com/insideapp-oss/mobile-application-security-rules",
+    "categories": [
+      "MOBILE"
+    ]
+  }
+]

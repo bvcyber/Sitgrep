@@ -66,6 +66,21 @@ def get_sources(path=SOURCES_PATH) -> list:
         sources = []
         with open(path, "r") as f:
             sources = json.load(f)
+        if isinstance(sources, dict) and isinstance(sources.get("sources"), list):
+            # Legacy {"sources": [...]} format; migrate to a plain list
+            sources = sources["sources"]
+            if path == SOURCES_PATH:
+                log.warn(
+                    "sources.json uses a legacy format. Migrating to the current format..."
+                )
+                try:
+                    with open(path, "w") as f:
+                        json.dump(sources, f, indent=2)
+                except OSError as e:
+                    log.warn(f"Could not migrate sources.json: {e}")
+        if not isinstance(sources, list):
+            console.print("sources.json has an unexpected format.")
+            return []
         return sources
     except FileNotFoundError:
         console.print("sources.json not found.")
